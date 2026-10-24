@@ -33,6 +33,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Brainrot Card Clash** | Anime Card Clash (card packs, mutations, 3-card deck, boss ladder) | `build/BrainrotCardClash.rbxlx` |
 | **Brainrot Hotel** | DOORS (100 rooms, drawers, closets, Sahur rush, troll Summon product) | `build/BrainrotHotel.rbxlx` |
 | **Eat the Brainrot World** | Eat the World (eat the city to grow, eat smaller players, Shrink Ray) | `build/EatTheBrainrotWorld.rbxlx` |
+| **Escape the Lava for Brainrots** | Tsunami-escape variant with a lava flow and volcanic zones | `build/EscapeLavaForBrainrots.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
