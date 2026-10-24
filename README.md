@@ -51,6 +51,11 @@ buyer's name. That social proof is what makes these products sell in the real ga
   and the Studio test purchases.
 - `shared/common/`: number formatting (1.2K, 3.4M…) and UI helpers.
 
+## Tests
+`tests/run.sh` runs the save system and purchase handling against mocked Roblox APIs under the plain `luau` CLI.
+It covers receipts being granted exactly once, failed saves never being reported as granted, session locks
+blocking duplicate loads, stale servers being unable to overwrite newer data, and shutdown saves.
+
 ## Editing / rebuilding
 The games use [Rojo](https://rojo.space). To rebuild every place file:
 
