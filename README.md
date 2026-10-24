@@ -20,7 +20,7 @@ Snap your meals, scan your body and finish daily challenges to earn XP and rank 
 
 ## Download
 
-**[⬇ GrindFit.apk](../../raw/claude/ai-fitness-tracker-game-dkkb78/releases/GrindFit.apk)** (or open `releases/GrindFit.apk` in this repo and tap **Download raw file**)
+**[⬇ GrindFit.apk](https://github.com/Sxvage123/Sxvage123/raw/claude/ai-fitness-tracker-game-dkkb78/releases/GrindFit.apk)** (or open `releases/GrindFit.apk` in this repo and tap **Download raw file**)
 
 To install it:
 1. Open the link on your Android phone and tap **Download**.
