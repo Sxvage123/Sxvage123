@@ -63,7 +63,7 @@ export function baselineXP(stats, week) {
   return Math.max(700, n ? sum / n : 700);
 }
 
-export function standings(stats, league, week, now = new Date()) {
+export function standings(stats, league, week, now = new Date(), you = 'You') {
   const tier = league.tier;
   // In the week you join, rivals only start scoring from the moment you joined.
   const j = league.joinedAt && weekStartOf(league.joinedAt) === week ? weekProgress(week, new Date(league.joinedAt)) : 0;
@@ -75,7 +75,7 @@ export function standings(stats, league, week, now = new Date()) {
     xp: Math.round(r.final * (1 - j) * Math.pow(t, r.curve) * (0.92 + 0.16 * Math.abs(Math.sin(t * 9 + r.seed * 6)))),
     you: false,
   }));
-  rows.push({ name: 'You', xp: weekXP(stats, week), you: true });
+  rows.push({ name: you, xp: weekXP(stats, week), you: true });
   rows.sort((a, b) => b.xp - a.xp || (a.you ? -1 : 1));
   rows.forEach((r, i) => {
     r.place = i + 1;

@@ -1,6 +1,8 @@
 // Ranks tab: rank ladder, weekly league, badges, food & weight trends, progress photos.
 
-import { esc, fmt, sheet } from './dom.js';
+import { esc, fmt, sheet, toast } from './dom.js';
+import { shareRank } from './sharecard.js';
+import { lbToKg } from '../lib/nutrition.js';
 import { rankEmblem, lineChart, barChart } from './charts.js';
 import { RANKS, rankFor, dayTotals } from '../lib/game.js';
 import { standings, LEAGUES, weekProgress, PROMOTE, DEMOTE } from '../lib/league.js';
@@ -37,6 +39,7 @@ export function renderProgress(root, app) {
 
 function rankSection(sec, app) {
   const { stats } = app;
+  setTimeout(() => sec.querySelector('[data-share]')?.addEventListener('click', () => shareRank(app)));
   const r = stats.rank;
   sec.innerHTML = `
     <section class="card rank-hero" style="--rank:${r.color};--rank-glow:${r.glow}">
@@ -45,6 +48,7 @@ function rankSection(sec, app) {
       <div class="muted">Level ${stats.level.level} · ${fmt(stats.xp)} XP</div>
       <div class="xpbar big"><div class="xpbar-fill" style="width:${(r.progress * 100).toFixed(1)}%"></div></div>
       <div class="muted small">${r.nextAt ? `${fmt(r.nextAt - stats.xp)} XP to ${esc(r.nextTitle)}` : 'You are a Legend.'}</div>
+      <button class="btn btn-ghost btn-sm mt" data-share>📤 Share my rank</button>
     </section>
     <section class="card">
       <div class="card-head"><h3>Rank ladder</h3></div>
@@ -68,7 +72,7 @@ function rankSection(sec, app) {
 export function leagueHTML(app) {
   const { state, stats } = app;
   const lg = LEAGUES[state.league.tier];
-  const rows = standings(stats, state.league, state.league.week);
+  const rows = standings(stats, state.league, state.league.week, new Date(), state.profile.name);
   const left = 1 - weekProgress(state.league.week);
   const hoursLeft = Math.max(0, Math.round(left * 7 * 24));
   const timeLeft = hoursLeft > 48 ? `${Math.round(hoursLeft / 24)} days` : `${hoursLeft} hours`;
@@ -86,7 +90,7 @@ export function leagueHTML(app) {
           (r) => `
         <div class="standing ${r.you ? 'you' : ''} zone-${r.zone}">
           <span class="place">${r.place}</span>
-          <span class="avatar" style="background:${avatarColor(r.name)}">${esc(r.name[0])}</span>
+          <span class="avatar" style="background:${r.you ? 'var(--accent)' : avatarColor(r.name)}">${esc(r.name[0])}</span>
           <span class="grow name">${esc(r.name)}</span>
           <b>${fmt(r.xp)} XP</b>
         </div>
@@ -112,7 +116,7 @@ export function openLeague(app) {
 function avatarColor(name) {
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return name === 'You' ? 'var(--accent)' : `hsl(${h} 55% 45%)`;
+  return `hsl(${h} 55% 45%)`;
 }
 
 function badgeSection(sec, app) {
@@ -160,8 +164,8 @@ function trendSection(sec, app) {
       ${barChart(days.map((d, i) => ({ x: parseDay(d).toLocaleDateString(undefined, { weekday: 'narrow' }), y: xpDays[i], color: 'var(--violet)' })))}
     </section>
     <section class="card">
-      <div class="card-head"><h3>Weight</h3><span class="muted small">${weights.length} entries</span></div>
-      ${weights.length >= 2 ? lineChart(weights.map((w) => ({ x: shortDay(w.date), y: imp ? kgToLb(w.kg) : w.kg })), { unit: imp ? ' lb' : ' kg', color: 'var(--blue)' }) : '<p class="muted small">Weigh in with each body scan to see your trend.</p>'}
+      <div class="card-head"><h3>Weight</h3><button class="btn btn-ghost btn-sm" data-weigh>＋ Log weight</button></div>
+      ${weights.length >= 2 ? lineChart(weights.map((w) => ({ x: shortDay(w.date), y: imp ? kgToLb(w.kg) : w.kg })), { unit: imp ? ' lb' : ' kg', color: 'var(--blue)' }) : '<p class="muted small">Log your weight a few times a week (mornings are best) to see your trend.</p>'}
     </section>
     ${
       photos.length
@@ -170,4 +174,34 @@ function trendSection(sec, app) {
           <div class="gallery">${photos.slice(-12).reverse().map((s) => `<img src="${s.thumb}" alt=""/>`).join('')}</div></section>`
         : ''
     }`;
+  sec.querySelector('[data-weigh]').onclick = () => logWeight(app);
+}
+
+export function logWeight(app) {
+  const p = app.state.profile;
+  const imp = app.state.settings.units !== 'metric';
+  sheet((el, close) => {
+    el.innerHTML = `
+      <h2 class="sheet-title">Log weight</h2>
+      <p class="muted small">Same scale, same time of day (right after waking up) gives the cleanest trend.</p>
+      <div class="input-unit"><input class="input input-xl" data-w type="number" inputmode="decimal" value="${imp ? Math.round(kgToLb(p.weightKg) * 10) / 10 : p.weightKg}"/><span>${imp ? 'lb' : 'kg'}</span></div>
+      <div class="onb-error" data-err></div>
+      <button class="btn btn-primary btn-block btn-lg" data-ok>Save</button>`;
+    const input = el.querySelector('[data-w]');
+    setTimeout(() => input.select(), 60);
+    el.querySelector('[data-ok]').onclick = () => {
+      const v = Number(input.value);
+      const kg = Math.round((imp ? lbToKg(v) : v) * 10) / 10;
+      if (!(kg >= 30 && kg <= 300)) {
+        el.querySelector('[data-err]').textContent = 'Enter a realistic weight.';
+        return;
+      }
+      app.update((s) => {
+        s.profile.weightKg = kg;
+        s.weights = [...(s.weights || []).filter((w) => w.date !== app.today), { date: app.today, kg }];
+      });
+      close();
+      toast('Weight logged — targets updated', { icon: '⚖️' });
+    };
+  });
 }

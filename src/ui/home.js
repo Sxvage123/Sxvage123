@@ -20,7 +20,7 @@ export function renderHome(root, app) {
   const remaining = p.calorieGoal - Math.round(t.calories);
   const league = state.league;
   const lg = LEAGUES[league.tier];
-  const rows = standings(stats, league, league.week);
+  const rows = standings(stats, league, league.week, new Date(), state.profile.name);
   const me = rows.find((r) => r.you);
   const daysLeft = Math.max(0, Math.ceil(7 * (1 - weekProgress(league.week))));
   const hour = new Date().getHours();

@@ -1,6 +1,6 @@
 // First-run setup: collects body stats and goal, computes targets, then drops you into the grind.
 
-import { esc, haptic } from './dom.js';
+import { esc, haptic, sheet } from './dom.js';
 import { ACTIVITY_LEVELS, GOALS, computeTargets, lbToKg, inToCm, kgToLb, cmToFtIn } from '../lib/nutrition.js';
 import { targetsFor } from '../app.js';
 
@@ -58,6 +58,7 @@ export function renderOnboarding(root, app) {
       });
       draft = null;
       step = 0;
+      setTimeout(() => showGuide(), 400);
       return;
     }
     step += 1;
@@ -205,3 +206,17 @@ const BODY = {
     </div>`;
   },
 };
+
+export function showGuide() {
+  return sheet((el, close) => {
+    el.innerHTML = `
+      <h2 class="sheet-title">How to grind 🎮</h2>
+      <div class="guide-step"><span>🍽️</span><div><b>Log everything you eat</b><small>Snap a photo, search or scan a barcode. +10 XP per meal, plus bonuses for 3 meals, protein and on-target calories.</small></div></div>
+      <div class="guide-step"><span>⚔️</span><div><b>Crush the daily challenge</b><small>A new one every day that scales with your rank. Sundays bring a boss challenge worth 2× XP.</small></div></div>
+      <div class="guide-step"><span>🧬</span><div><b>Scan weekly</b><small>Set your baseline now. Each new body-fat low pays up to +300 XP.</small></div></div>
+      <div class="guide-step"><span>🔥</span><div><b>Keep the streak alive</b><small>Every streak day adds +5% XP (up to ×1.5). Every 7 days earns a freeze that protects a missed day.</small></div></div>
+      <div class="guide-step"><span>🏆</span><div><b>Climb the league</b><small>Finish top 3 in your weekly league to get promoted. The bottom 3 drop down.</small></div></div>
+      <button class="btn btn-primary btn-block btn-lg mt" data-ok>Let’s get it</button>`;
+    el.querySelector('[data-ok]').onclick = () => close();
+  });
+}

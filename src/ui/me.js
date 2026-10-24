@@ -8,6 +8,8 @@ import { esc, fmt, sheet, toast, confirmDialog, setHaptics } from './dom.js';
 import { rankEmblem } from './charts.js';
 import { ACTIVITY_LEVELS, GOALS, kgToLb, lbToKg, cmToFtIn, inToCm, bmi } from '../lib/nutrition.js';
 import { targetsFor } from '../app.js';
+import { showGuide } from './onboarding.js';
+import { APP_VERSION } from '../version.js';
 import { exportJSON, importJSON, emptyState, flush, saveState } from '../store.js';
 
 export function renderMe(root, app) {
@@ -54,8 +56,9 @@ export function renderMe(root, app) {
 
   <section class="card list">
     <div class="list-head">About</div>
-    <button class="list-row" data-about><span>How GrindFit works</span><span class="muted">›</span></button>
-    <div class="list-row static"><span>Version</span><span class="muted">1.0.0 · offline AI</span></div>
+    <button class="list-row" data-guide><span>How to play</span><span class="muted">›</span></button>
+    <button class="list-row" data-about><span>How the AI works</span><span class="muted">›</span></button>
+    <div class="list-row static"><span>Version</span><span class="muted">${APP_VERSION} · offline AI</span></div>
   </section>
   <p class="muted tiny center">All data and photos stay on this phone. No account, no subscription, no API keys.</p>
   <div class="spacer"></div>`;
@@ -89,6 +92,7 @@ export function renderMe(root, app) {
     app.render();
   };
   root.querySelector('[data-about]').onclick = () => aboutSheet();
+  root.querySelector('[data-guide]').onclick = () => showGuide();
 }
 
 const EDITORS = {

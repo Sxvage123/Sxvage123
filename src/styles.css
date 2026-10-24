@@ -511,3 +511,13 @@ details.cat summary::-webkit-details-marker { display: none; }
 @media (min-width: 700px) {
   .view { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 }
+.link-btn.danger { color: var(--danger); }
+
+.repeat-btn { flex: none; font-size: 12px; font-weight: 750; color: var(--teal); padding: 8px 10px; border-radius: 10px; background: rgba(94, 230, 208, 0.08); border: 1px solid rgba(94, 230, 208, 0.25); margin-top: 6px; }
+.meal-group .row .add-row { border-top: 0; }
+.meal-group .meal-row + .row .add-row, .meal-group .meal-row + .row { border-top: 1px solid var(--line); }
+.guide-step { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.guide-step:first-of-type { border-top: 0; }
+.guide-step > span { font-size: 28px; width: 44px; text-align: center; flex: none; }
+.guide-step b { display: block; }
+.guide-step small { color: var(--muted); font-size: 13px; }

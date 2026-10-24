@@ -56,11 +56,15 @@ export function renderFood(root, app) {
   ${MEAL_TYPES.map((mt) => {
     const list = meals.filter((m) => (m.mealType || 'snack') === mt.id);
     const kcal = list.reduce((s, m) => s + m.calories, 0);
+    const prev = list.length ? [] : mealsOn(state, addDays(viewDate, -1)).filter((m) => (m.mealType || 'snack') === mt.id);
     return `
     <section class="card meal-group">
       <div class="card-head"><h3>${mt.icon} ${mt.label}</h3><span class="muted small">${list.length ? `${fmt(kcal)} kcal` : ''}</span></div>
       ${list.map((m) => mealRow(m)).join('')}
-      <button class="add-row" data-add-type="${mt.id}">＋ Add ${mt.label.toLowerCase()}</button>
+      <div class="row">
+        <button class="add-row grow" data-add-type="${mt.id}">＋ Add ${mt.label.toLowerCase()}</button>
+        ${prev.length ? `<button class="repeat-btn" data-repeat="${mt.id}">↻ Same as yesterday · ${fmt(prev.reduce((a, m) => a + m.calories, 0))}</button>` : ''}
+      </div>
     </section>`;
   }).join('')}
   <div class="spacer"></div>
@@ -77,6 +81,19 @@ export function renderFood(root, app) {
   root.querySelectorAll('[data-add-type]').forEach((b) => (b.onclick = () => openAddFood(app, 'snap', { mealType: b.dataset.addType, date: viewDate })));
   root.querySelector('[data-fab]').onclick = () => openAddFood(app, 'snap', { date: viewDate });
   root.querySelectorAll('[data-meal]').forEach((b) => (b.onclick = () => editMeal(app, b.dataset.meal)));
+  root.querySelectorAll('[data-repeat]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        const type = b.dataset.repeat;
+        const prev = mealsOn(app.state, addDays(viewDate, -1)).filter((m) => (m.mealType || 'snack') === type);
+        const time = viewDate === app.today ? new Date().toISOString() : `${viewDate}T12:00:00`;
+        app.update((s) => {
+          for (const m of prev) s.meals.push({ ...m, id: uid(), date: viewDate, time });
+        });
+        haptic('success');
+        toast(`Logged ${prev.length} item${prev.length > 1 ? 's' : ''} from yesterday`, { icon: '↻' });
+      }),
+  );
 }
 
 function mealRow(m) {
@@ -218,6 +235,7 @@ function foodDetail(body, app, food, { source, thumb, estimated, onBack, done })
         </div>
         <label class="label">Servings</label>
         ${servingStepper(k)}
+        ${food.category === 'My foods' && (app.state.custom || []).some((c) => c.id === food.id) ? '<button class="link-btn danger" data-del-custom>Remove from my foods</button>' : ''}
         <div class="row gap mt">
           <button class="btn btn-ghost" data-fav>${(app.state.favorites || []).some((f) => f.id === food.id) ? '★ Saved' : '☆ Favorite'}</button>
           <button class="btn btn-primary grow" data-log>Log it · +10 XP</button>
@@ -242,6 +260,15 @@ function foodDetail(body, app, food, { source, thumb, estimated, onBack, done })
       draw();
     };
     body.querySelector('[data-log]').onclick = () => done([{ food, servings: k, source, thumb, estimated }]);
+    body.querySelector('[data-del-custom]')?.addEventListener('click', async () => {
+      if (!(await confirmDialog({ title: 'Remove this food?', message: `${food.name} will be removed from your saved foods. Past log entries stay.`, confirm: 'Remove', danger: true }))) return;
+      app.update((s) => {
+        s.custom = (s.custom || []).filter((c) => c.id !== food.id);
+        s.favorites = (s.favorites || []).filter((c) => c.id !== food.id);
+        s.recent = (s.recent || []).filter((c) => c.id !== food.id);
+      }, { render: false });
+      onBack();
+    });
   };
   draw();
 }
@@ -389,7 +416,7 @@ function searchPane(body, app, ctx, done, initial = '') {
                  }
                </div>
                <button class="btn btn-ghost btn-block mt" data-quick>✏️ Add “${esc(query)}” manually</button>`
-            : `${listSection('★ Favorites', state.favorites || [])}${listSection('🕘 Recent', state.recent || [])}
+            : `${listSection('★ Favorites', state.favorites || [])}${listSection('🕘 Recent', state.recent || [])}${listSection('✏️ My foods', state.custom || [])}
                ${FOOD_CATEGORIES.map((c) => `<details class="cat"><summary>${esc(c)}</summary>${FOODS.filter((f) => f.category === c).map((f) => foodRow(f)).join('')}</details>`).join('')}`
         }
       </div>`;
