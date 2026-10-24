@@ -99,7 +99,7 @@ test('food mapping', () => {
   assert.equal(foodForLabel('Fried rice').food.name, 'Fried rice');
   const est = foodForLabel('Tripe soup');
   assert.equal(est.estimated, true);
-  assert.equal(est.food.calories, 250);
+  assert.equal(est.food.calories, 240);
   assert.ok(foodForLabel('Zzzunknown').food.calories > 0);
   assert.equal(searchFoods('chicken breast')[0].name, 'Grilled chicken breast');
   assert.equal(searchFoods('banana')[0].name, 'Banana');

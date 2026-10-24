@@ -155,3 +155,23 @@ test('badges compute', () => {
   assert.equal(b.find((x) => x.id === 'first_bite').earned, true);
   assert.equal(b.find((x) => x.id === 'legend').earned, false);
 });
+
+test('league initialises from an empty state', () => {
+  const s = blank();
+  const stats = computeStats(s, '2026-03-10');
+  const league = settleLeague(stats, { tier: 0, week: null, history: [], baselines: {} }, '2026-03-10');
+  assert.equal(league.week, '2026-03-09');
+  assert.equal(league.history.length, 0);
+});
+
+test('league: rivals start at zero in the week you join', () => {
+  const s = blank();
+  const stats = computeStats(s, '2026-03-14');
+  const joined = new Date(2026, 2, 14, 10, 0, 0); // Saturday
+  const league = settleLeague(stats, { tier: 0, week: null, history: [], baselines: {} }, '2026-03-14', joined);
+  const rows = standings(stats, league, league.week, joined);
+  assert.ok(rows.every((r) => r.xp === 0));
+  const later = standings(stats, league, league.week, new Date(2026, 2, 15, 23, 0, 0));
+  assert.ok(later.some((r) => r.xp > 0));
+  assert.ok(Math.max(...later.map((r) => r.xp)) < 1500);
+});

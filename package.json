@@ -2,11 +2,13 @@
   "name": "grindfit",
   "version": "1.0.0",
   "description": "AI calorie tracker + body fat scanner turned into a ranked grinding game",
-  "main": "server.js",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "dev": "node --watch --env-file-if-exists=.env server.js",
-    "test": "node --test test/*.test.js"
+    "models": "node scripts/fetch-models.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "npx --yes http-server www -p 8080 -c-1",
+    "test": "node --test test/*.test.js",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
   },
   "repository": {
     "type": "git",
@@ -18,11 +20,16 @@
   },
   "homepage": "https://github.com/Sxvage123/Sxvage123#readme",
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.2.1",
     "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/camera": "^8.2.6",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
     "@mediapipe/tasks-vision": "^1.1.1"

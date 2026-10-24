@@ -3,3 +3,10 @@ node_modules/
 *.log
 .DS_Store
 models-cache/
+www/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+*.keystore

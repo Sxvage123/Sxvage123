@@ -1,0 +1,30 @@
+{
+  "appId": "com.grindfit.app",
+  "appName": "GrindFit",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b0d12",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": false,
+      "backgroundColor": "#0b0d12",
+      "androidScaleType": "CENTER_INSIDE",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0b0d12"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon",
+      "iconColor": "#d4ff3a"
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK"
+    }
+  }
+}

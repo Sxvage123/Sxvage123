@@ -65,11 +65,14 @@ export function baselineXP(stats, week) {
 
 export function standings(stats, league, week, now = new Date()) {
   const tier = league.tier;
-  const t = weekProgress(week, now);
+  // In the week you join, rivals only start scoring from the moment you joined.
+  const j = league.joinedAt && weekStartOf(league.joinedAt) === week ? weekProgress(week, new Date(league.joinedAt)) : 0;
+  const raw = weekProgress(week, now);
+  const t = j >= 1 ? 1 : Math.max(0, (raw - j) / (1 - j));
   const rivals = rivalsFor(week, tier, league.baselines?.[week] ?? baselineXP(stats, week));
   const rows = rivals.map((r) => ({
     name: r.name,
-    xp: Math.round(r.final * Math.pow(t, r.curve) * (0.92 + 0.16 * Math.abs(Math.sin(t * 9 + r.seed * 6)))) ,
+    xp: Math.round(r.final * (1 - j) * Math.pow(t, r.curve) * (0.92 + 0.16 * Math.abs(Math.sin(t * 9 + r.seed * 6)))),
     you: false,
   }));
   rows.push({ name: 'You', xp: weekXP(stats, week), you: true });
@@ -82,9 +85,16 @@ export function standings(stats, league, week, now = new Date()) {
 }
 
 // Called on app start: settles any finished weeks and returns the updated league state.
-export function settleLeague(stats, league, today) {
+const weekStartOf = (iso) => {
+  const d = new Date(iso);
+  return weekStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+};
+
+export function settleLeague(stats, league, today, now = new Date()) {
   const current = weekStart(today);
   const next = { tier: 0, week: current, history: [], baselines: {}, ...league };
+  if (!next.week) next.week = current;
+  if (!next.joinedAt) next.joinedAt = now.toISOString();
   next.baselines = { ...next.baselines };
   if (!next.baselines[current]) next.baselines[current] = Math.round(baselineXP(stats, current));
   let guard = 0;
