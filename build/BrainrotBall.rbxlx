@@ -1,0 +1,1610 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">ShopUI</string>
+          <string name="Source"><![CDATA[-- Shared Robux shop window + purchase helper used by every game's client.
+-- Expects Config.Passes/Products (name -> id) and Config.PassInfo/ProductInfo (display rows).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local UI = require(script.Parent.UI)
+
+local ShopUI = {}
+
+function ShopUI.Buyer(config, toast: (string, Color3?) -> ())
+	local player = Players.LocalPlayer
+	local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+	return function(kind: string, key: string)
+		if kind == "Pass" and player:GetAttribute("Pass_" .. key) then
+			return
+		end
+		local id = if kind == "Pass" then config.Passes[key] else config.Products[key]
+		if id and id > 0 then
+			if kind == "Pass" then
+				MarketplaceService:PromptGamePassPurchase(player, id)
+			else
+				MarketplaceService:PromptProductPurchase(player, id)
+			end
+		elseif RunService:IsStudio() then
+			testPurchase:FireServer(kind, key)
+			toast("[Studio test] granted " .. key, Color3.fromRGB(255, 215, 0))
+		else
+			toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+		end
+	end
+end
+
+-- Returns the (hidden) shop frame; toggle its Visible to open it.
+function ShopUI.Create(gui: ScreenGui, config, buy: (string, string) -> (), theme: Color3?): Frame
+	local player = Players.LocalPlayer
+	local bg = theme or Color3.fromRGB(40, 40, 60)
+	local frame = UI.new("Frame", {
+		Name = "Shop",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, 520, 0.7, 0),
+		BackgroundColor3 = bg,
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 560)
+	c.Parent = frame
+	UI.Label("SHOP", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame }).Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		Parent = frame,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
+
+	local order = 0
+	local function item(info, kind: string)
+		order += 1
+		local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12), LayoutOrder = order, Parent = list }, { UI.Corner(12) })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(215, 215, 230), Parent = row })
+		local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(120, 52),
+			Parent = row,
+		})
+		if kind == "Pass" then
+			local function owned()
+				if player:GetAttribute("Pass_" .. info.Key) then
+					b.Text = "OWNED"
+					b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+				end
+			end
+			player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+			owned()
+		end
+		b.Activated:Connect(function()
+			buy(kind, info.Key)
+		end)
+	end
+	for _, info in config.ProductInfo do
+		item(info, "Product")
+	end
+	for _, info in config.PassInfo do
+		item(info, "Pass")
+	end
+	return frame
+end
+
+-- Gold [VIP] chat tag for players owning the given pass.
+function ShopUI.VIPChatTag(passKey: string)
+	local TextChatService = game:GetService("TextChatService")
+	TextChatService.OnIncomingMessage = function(message)
+		local props = Instance.new("TextChatMessageProperties")
+		local source = message.TextSource
+		local speaker = source and Players:GetPlayerByUserId(source.UserId)
+		if speaker and speaker:GetAttribute("Pass_" .. passKey) then
+			props.PrefixText = "<font color='#FFD700'>[VIP]</font> " .. message.PrefixText
+		end
+		return props
+	end
+end
+
+-- Column of big buttons on the left edge.
+function ShopUI.SideBar(gui: ScreenGui): Frame
+	local side = UI.new("Frame", {
+		Name = "SideBar",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(130, 330),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}) :: Frame
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = side
+	return side
+end
+
+return ShopUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Brainrot Ball (Blade Ball style). Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	DoubleCoins = 0,
+	VIP = 0,
+	QuickDash = 0,
+	LuckyCrates = 0,
+}
+Config.PassInfo = {
+	{ Key = "DoubleCoins", Name = "2x Coins", Price = 199, Description = "Double coins from wins and kills" },
+	{ Key = "VIP", Name = "VIP", Price = 249, Description = "+50% coins, VIP tag, gold trail" },
+	{ Key = "QuickDash", Name = "Quick Dash", Price = 99, Description = "Dash cooldown 3s instead of 6s" },
+	{ Key = "LuckyCrates", Name = "Lucky Crates", Price = 199, Description = "2x chance for Epic+ swords" },
+}
+Config.Products = {
+	CoinsSmall = 0,
+	CoinsLarge = 0,
+	Respawn = 0,
+}
+Config.ProductInfo = {
+	{ Key = "CoinsSmall", Name = "1,000 Coins", Price = 49, Description = "Open more sword crates" },
+	{ Key = "CoinsLarge", Name = "6,000 Coins", Price = 249, Description = "Best value coin pile" },
+	{ Key = "Respawn", Name = "Second Chance", Price = 29, Description = "Jump back into this round!" },
+}
+
+Config.MinPlayers = 2
+Config.Intermission = 12
+Config.BallStartSpeed = 30
+Config.BallSpeedGain = 4
+Config.BallMaxSpeed = 180
+Config.ParryWindow = 0.45
+Config.ParryCooldown = 0.9
+Config.DashCooldown = 6
+Config.WinCoins = 60
+Config.KillCoins = 15
+Config.CrateCost = 400
+
+Config.Rarities = {
+	{ Name = "Common", Weight = 60, Color = Color3.fromRGB(200, 200, 200) },
+	{ Name = "Rare", Weight = 28, Color = Color3.fromRGB(60, 140, 255) },
+	{ Name = "Epic", Weight = 9, Color = Color3.fromRGB(170, 70, 255) },
+	{ Name = "Legendary", Weight = 2.7, Color = Color3.fromRGB(255, 200, 0) },
+	{ Name = "Mythic", Weight = 0.3, Color = Color3.fromRGB(255, 50, 50) },
+}
+
+Config.Swords = {
+	{ Id = "stick", Name = "Tung Stick", Rarity = "Common", Color = Color3.fromRGB(150, 100, 50), Material = Enum.Material.Wood },
+	{ Id = "pizza", Name = "Pizza Slicer", Rarity = "Common", Color = Color3.fromRGB(255, 200, 80), Material = Enum.Material.SmoothPlastic },
+	{ Id = "cheese", Name = "Cheese Blade", Rarity = "Common", Color = Color3.fromRGB(255, 230, 90), Material = Enum.Material.SmoothPlastic },
+	{ Id = "tralala", Name = "Shark Fin", Rarity = "Rare", Color = Color3.fromRGB(80, 160, 255), Material = Enum.Material.Metal },
+	{ Id = "banana", Name = "Banana Katana", Rarity = "Rare", Color = Color3.fromRGB(255, 230, 40), Material = Enum.Material.SmoothPlastic },
+	{ Id = "croc", Name = "Croc Cutter", Rarity = "Epic", Color = Color3.fromRGB(50, 150, 60), Material = Enum.Material.Metal },
+	{ Id = "frost", Name = "Frigo Frostblade", Rarity = "Epic", Color = Color3.fromRGB(170, 230, 255), Material = Enum.Material.Ice },
+	{ Id = "rizz", Name = "Rizz Rapier", Rarity = "Legendary", Color = Color3.fromRGB(255, 120, 220), Material = Enum.Material.Neon },
+	{ Id = "gold", Name = "Golden Sahur Bat", Rarity = "Legendary", Color = Color3.fromRGB(255, 200, 0), Material = Enum.Material.Neon },
+	{ Id = "sigma", Name = "Sigma Saber", Rarity = "Mythic", Color = Color3.fromRGB(255, 0, 170), Material = Enum.Material.ForceField },
+}
+
+Config.SwordById = {}
+for _, s in Config.Swords do
+	Config.SwordById[s.Id] = s
+end
+Config.RarityColor = {}
+for _, r in Config.Rarities do
+	Config.RarityColor[r.Name] = r.Color
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		-- Already applied in memory; only confirm once it's actually saved
+		-- (an earlier save may have failed).
+		if DataService.Save(player, false) then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="11">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="Script" referent="12">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Brainrot Ball server: homing ball, parries, eliminations, rounds, sword crates.
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+
+Lighting.ClockTime = 17.5
+Lighting.Brightness = 2
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local ParryRemote = remote("RemoteEvent", "Parry")
+local ParryFx = remote("RemoteEvent", "ParryFx")
+local CrateRemote = remote("RemoteFunction", "OpenCrate")
+local EquipRemote = remote("RemoteFunction", "EquipSword")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+---------------------------------------------------------------- map
+
+local ARENA = Vector3.new(0, 0, 300)
+local ARENA_RADIUS = 70
+local world = Instance.new("Folder")
+world.Name = "World"
+world.Parent = workspace
+local function part(props): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	p.Parent = world
+	return p
+end
+part({ Name = "Lobby", Size = Vector3.new(90, 2, 90), Position = Vector3.new(0, -1, 0), Color = Color3.fromRGB(235, 235, 245), Material = Enum.Material.Marble })
+local spawn = Instance.new("SpawnLocation")
+spawn.Anchored = true
+spawn.Size = Vector3.new(12, 1, 12)
+spawn.Position = Vector3.new(0, 0.5, 0)
+spawn.Neutral = true
+spawn.Color = Color3.fromRGB(255, 80, 80)
+spawn.Material = Enum.Material.Neon
+spawn.Parent = world
+part({ Name = "Arena", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, ARENA_RADIUS * 2, ARENA_RADIUS * 2), CFrame = CFrame.new(ARENA - Vector3.new(0, 1, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 60, 80), Material = Enum.Material.Slate })
+for i = 1, 36 do
+	local a = i / 36 * math.pi * 2
+	part({ Size = Vector3.new(13, 6, 1.5), CFrame = CFrame.new(ARENA + Vector3.new(math.cos(a) * ARENA_RADIUS, 3, math.sin(a) * ARENA_RADIUS)) * CFrame.Angles(0, -a + math.pi / 2, 0), Color = Color3.fromRGB(255, 60, 60), Material = Enum.Material.Neon, Transparency = 0.4 })
+end
+
+local ball = part({ Name = "Ball", Shape = Enum.PartType.Ball, Size = Vector3.one * 3, Position = ARENA + Vector3.new(0, 8, 0), Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Neon, CanCollide = false })
+ball.Transparency = 1
+local light = Instance.new("PointLight")
+light.Range = 16
+light.Brightness = 3
+light.Parent = ball
+local trailA = Instance.new("Attachment")
+trailA.Position = Vector3.new(0, 1, 0)
+trailA.Parent = ball
+local trailB = Instance.new("Attachment")
+trailB.Position = Vector3.new(0, -1, 0)
+trailB.Parent = ball
+local trail = Instance.new("Trail")
+trail.Attachment0 = trailA
+trail.Attachment1 = trailB
+trail.Lifetime = 0.25
+trail.LightEmission = 1
+trail.Parent = ball
+
+---------------------------------------------------------------- helpers
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	player:SetAttribute("Coins", data.Coins)
+	player:SetAttribute("Wins", data.Wins)
+	player:SetAttribute("Sword", data.Sword)
+	local owned = {}
+	for id in data.Swords do
+		table.insert(owned, id)
+	end
+	player:SetAttribute("OwnedSwords", table.concat(owned, ","))
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Wins.Value = data.Wins
+		stats.Kills.Value = data.Kills
+	end
+end
+
+local function coinMult(player: Player): number
+	local m = 1
+	if MonetizationService.OwnsPass(player, "DoubleCoins") then
+		m *= 2
+	end
+	if MonetizationService.OwnsPass(player, "VIP") then
+		m *= 1.5
+	end
+	return m
+end
+
+local function addCoins(player: Player, amount: number)
+	local data = DataService.Get(player)
+	if data then
+		data.Coins += math.floor(amount)
+		sync(player)
+	end
+end
+
+local function rootOf(player: Player): BasePart?
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function alive(): { Player }
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if p:GetAttribute("Alive") and rootOf(p) then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+local function equipSword(player: Player)
+	local data = DataService.Get(player)
+	local character = player.Character
+	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")) :: BasePart?
+	if not data or not hand then
+		return
+	end
+	local old = character:FindFirstChild("SwordBlade")
+	if old then
+		old:Destroy()
+	end
+	local sword = Config.SwordById[data.Sword] or Config.Swords[1]
+	local blade = Instance.new("Part")
+	blade.Name = "SwordBlade"
+	blade.Size = Vector3.new(0.35, 0.35, 5)
+	blade.Color = sword.Color
+	blade.Material = sword.Material
+	blade.CanCollide = false
+	blade.CanQuery = false
+	blade.Massless = true
+	blade.CFrame = hand.CFrame * CFrame.new(0, -hand.Size.Y / 2, -2.4)
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = hand
+	weld.Part1 = blade
+	weld.Parent = blade
+	blade.Parent = character
+end
+
+---------------------------------------------------------------- ball
+
+local state = {
+	Active = false,
+	Target = nil :: Player?,
+	Speed = Config.BallStartSpeed,
+	LastHitter = nil :: Player?,
+	PausedUntil = 0,
+}
+local parryPressed: { [Player]: number } = {}
+local parryCooldown: { [Player]: number } = {}
+
+local function setTarget(player: Player?)
+	state.Target = player
+	ball:SetAttribute("TargetId", if player then player.UserId else 0)
+	ball.Color = Color3.fromHSV(math.random(), 0.8, 1)
+end
+
+local function pickTarget(exclude: Player?, aim: Vector3?, from: Vector3?): Player?
+	local candidates = {}
+	for _, p in alive() do
+		if p ~= exclude then
+			table.insert(candidates, p)
+		end
+	end
+	if #candidates == 0 then
+		return exclude
+	end
+	if aim and from then
+		local best, bestDot = nil, -2
+		for _, p in candidates do
+			local root = rootOf(p) :: BasePart
+			local dot = (root.Position - from).Unit:Dot(aim.Unit)
+			if dot > bestDot then
+				best, bestDot = p, dot
+			end
+		end
+		if best and bestDot > 0.5 then
+			return best
+		end
+	end
+	return candidates[math.random(1, #candidates)]
+end
+
+local function parryRange(): number
+	return math.max(14, state.Speed * 0.4)
+end
+
+local function deflect(player: Player, aim: Vector3?)
+	parryCooldown[player] = 0
+	parryPressed[player] = nil
+	state.Speed = math.min(Config.BallMaxSpeed, state.Speed + Config.BallSpeedGain)
+	state.LastHitter = player
+	local root = rootOf(player)
+	setTarget(pickTarget(player, aim, root and root.Position))
+	ParryFx:FireAllClients(ball.Position, player.UserId)
+end
+
+ParryRemote.OnServerEvent:Connect(function(player, aim)
+	if not state.Active or not player:GetAttribute("Alive") then
+		return
+	end
+	local now = os.clock()
+	if now < (parryCooldown[player] or 0) then
+		return
+	end
+	if typeof(aim) ~= "Vector3" or aim.Magnitude < 0.5 then
+		aim = nil
+	end
+	local root = rootOf(player)
+	if state.Target == player and root and (ball.Position - root.Position).Magnitude <= parryRange() then
+		deflect(player, aim)
+		return
+	end
+	-- Too early: remember the press briefly (latency forgiveness), then cooldown.
+	parryPressed[player] = now
+	parryCooldown[player] = now + Config.ParryCooldown
+	player:SetAttribute("ParryAim", aim)
+end)
+
+local function eliminate(player: Player)
+	player:SetAttribute("Alive", false)
+	local root = rootOf(player)
+	if root then
+		local boom = Instance.new("Explosion")
+		boom.Position = root.Position
+		boom.BlastPressure = 0
+		boom.DestroyJointRadiusPercent = 0
+		boom.Parent = workspace
+	end
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.Health = 0
+	end
+	local killer = state.LastHitter
+	if killer and killer ~= player and killer.Parent then
+		local data = DataService.Get(killer)
+		if data then
+			data.Kills += 1
+			addCoins(killer, Config.KillCoins * coinMult(killer))
+		end
+		notify(nil, killer.DisplayName .. " eliminated " .. player.DisplayName .. "!", Color3.fromRGB(255, 120, 80))
+	else
+		notify(nil, player.DisplayName .. " got hit by the ball!", Color3.fromRGB(255, 120, 80))
+	end
+	state.Speed = Config.BallStartSpeed
+	state.LastHitter = nil
+	state.PausedUntil = os.clock() + 1.5
+	ball.Position = ARENA + Vector3.new(0, 8, 0)
+	setTarget(pickTarget(nil))
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	if not state.Active then
+		return
+	end
+	local now = os.clock()
+	if now < state.PausedUntil then
+		return
+	end
+	local target = state.Target
+	local root = target and target:GetAttribute("Alive") and rootOf(target)
+	if not root then
+		setTarget(pickTarget(nil))
+		return
+	end
+	local toTarget = root.Position - ball.Position
+	local dist = toTarget.Magnitude
+	local step = state.Speed * dt
+	if dist <= step + 2.5 then
+		local pressed = parryPressed[target :: Player]
+		if pressed and now - pressed <= Config.ParryWindow then
+			deflect(target :: Player, (target :: Player):GetAttribute("ParryAim") :: Vector3?)
+		else
+			eliminate(target :: Player)
+		end
+		return
+	end
+	ball.Position += toTarget.Unit * step
+end)
+
+---------------------------------------------------------------- rounds
+
+local function arenaSpawn(i: number, n: number): CFrame
+	local a = i / n * math.pi * 2
+	local pos = ARENA + Vector3.new(math.cos(a) * 45, 4, math.sin(a) * 45)
+	return CFrame.lookAt(pos, ARENA + Vector3.new(0, 4, 0))
+end
+
+task.spawn(function()
+	while true do
+		for t = Config.Intermission, 1, -1 do
+			workspace:SetAttribute("RoundState", "Intermission")
+			workspace:SetAttribute("TimeLeft", t)
+			task.wait(1)
+		end
+		local players = {}
+		for _, p in Players:GetPlayers() do
+			if DataService.Get(p) and rootOf(p) then
+				table.insert(players, p)
+			end
+		end
+		local minPlayers = if RunService:IsStudio() then 1 else Config.MinPlayers
+		if #players < minPlayers then
+			workspace:SetAttribute("RoundState", "Waiting")
+			task.wait(2)
+			continue
+		end
+		for i, p in players do
+			p:SetAttribute("Alive", true)
+			p.Character:PivotTo(arenaSpawn(i, #players))
+		end
+		workspace:SetAttribute("RoundState", "Playing")
+		state.Speed = Config.BallStartSpeed
+		state.LastHitter = nil
+		state.PausedUntil = os.clock() + 2
+		ball.Position = ARENA + Vector3.new(0, 8, 0)
+		ball.Transparency = 0
+		setTarget(pickTarget(nil))
+		state.Active = true
+		local solo = #players == 1
+		while true do
+			local left = alive()
+			workspace:SetAttribute("AliveCount", #left)
+			if #left == 0 or (not solo and #left <= 1) then
+				break
+			end
+			task.wait(0.2)
+		end
+		state.Active = false
+		ball.Transparency = 1
+		setTarget(nil)
+		local winners = alive()
+		for _, w in winners do
+			local data = DataService.Get(w)
+			if data then
+				data.Wins += 1
+				addCoins(w, Config.WinCoins * coinMult(w))
+			end
+			notify(nil, w.DisplayName .. " WINS THE ROUND!", Color3.fromRGB(255, 215, 0))
+			w:SetAttribute("Alive", false)
+			if w.Character then
+				w.Character:PivotTo(CFrame.new(0, 4, 0))
+			end
+		end
+		workspace:SetAttribute("RoundState", "Ended")
+		task.wait(3)
+	end
+end)
+
+---------------------------------------------------------------- crates
+
+local function rollSword(player: Player)
+	local lucky = MonetizationService.OwnsPass(player, "LuckyCrates")
+	local total = 0
+	for i, r in Config.Rarities do
+		total += r.Weight * (if lucky and i >= 3 then 2 else 1)
+	end
+	local roll = math.random() * total
+	local rarity = Config.Rarities[1].Name
+	for i, r in Config.Rarities do
+		roll -= r.Weight * (if lucky and i >= 3 then 2 else 1)
+		if roll <= 0 then
+			rarity = r.Name
+			break
+		end
+	end
+	local pool = {}
+	for _, s in Config.Swords do
+		if s.Rarity == rarity then
+			table.insert(pool, s.Id)
+		end
+	end
+	return pool[math.random(1, #pool)]
+end
+
+CrateRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data then
+		return false, "Loading..."
+	end
+	if data.Coins < Config.CrateCost then
+		return false, "Need " .. Config.CrateCost .. " coins!"
+	end
+	data.Coins -= Config.CrateCost
+	local id = rollSword(player)
+	local sword = Config.SwordById[id]
+	local duplicate = data.Swords[id] == true
+	if duplicate then
+		data.Coins += math.floor(Config.CrateCost * 0.25)
+	else
+		data.Swords[id] = true
+	end
+	if sword.Rarity == "Legendary" or sword.Rarity == "Mythic" then
+		notify(nil, player.DisplayName .. " unboxed " .. sword.Rarity .. " " .. sword.Name .. "!", Config.RarityColor[sword.Rarity])
+	end
+	sync(player)
+	return true, id, duplicate
+end
+
+EquipRemote.OnServerInvoke = function(player, id)
+	local data = DataService.Get(player)
+	if not data or type(id) ~= "string" or not data.Swords[id] then
+		return false
+	end
+	data.Sword = id
+	equipSword(player)
+	sync(player)
+	return true
+end
+
+---------------------------------------------------------------- players
+
+local function addTrail(player: Player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root or root:FindFirstChild("VIPTrail") then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = root
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1, 0)
+	a1.Parent = root
+	local t = Instance.new("Trail")
+	t.Name = "VIPTrail"
+	t.Attachment0 = a0
+	t.Attachment1 = a1
+	t.Color = ColorSequence.new(Color3.fromRGB(255, 215, 0))
+	t.LightEmission = 1
+	t.Lifetime = 0.4
+	t.Parent = root
+end
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	for _, name in { "Wins", "Kills" } do
+		local v = Instance.new("IntValue")
+		v.Name = name
+		v.Parent = stats
+	end
+	stats.Parent = player
+	sync(player)
+	local function onCharacter(character: Model)
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait(0.2)
+		if state.Active and player:GetAttribute("Alive") then
+			character:PivotTo(arenaSpawn(math.random(1, 12), 12))
+		end
+		equipSword(player)
+		if MonetizationService.OwnsPass(player, "VIP") then
+			addTrail(player)
+		end
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	parryPressed[player] = nil
+	parryCooldown[player] = nil
+end)
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		CoinsSmall = function(player)
+			addCoins(player, 1000)
+			return true
+		end,
+		CoinsLarge = function(player)
+			addCoins(player, 6000)
+			return true
+		end,
+		Respawn = function(player)
+			if state.Active and not player:GetAttribute("Alive") then
+				player:SetAttribute("Alive", true)
+				player:LoadCharacter()
+				notify(nil, player.DisplayName .. " got a SECOND CHANCE!", Color3.fromRGB(90, 255, 90))
+			else
+				addCoins(player, 300)
+				notify(player, "No round to rejoin — you got 300 coins instead!", Color3.fromRGB(255, 215, 0))
+			end
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		if name == "VIP" then
+			addTrail(player)
+		end
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+DataService.Init("BrainrotBall_v1", {
+	Coins = 0,
+	Wins = 0,
+	Kills = 0,
+	Swords = { stick = true },
+	Sword = "stick",
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="13">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="14">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="15">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="16">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Brainrot Ball client: parry (click/F/button), dash, targeted warning, crates, swords, shop.
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local ShopUI = require(ReplicatedStorage.Common.ShopUI)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local ball = workspace:WaitForChild("World"):WaitForChild("Ball") :: BasePart
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+local buy = ShopUI.Buyer(Config, toast)
+local shop = ShopUI.Create(gui, Config, buy, Color3.fromRGB(50, 25, 35))
+ShopUI.VIPChatTag("VIP")
+
+---------------------------------------------------------------- HUD
+
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(360, 76),
+	BackgroundColor3 = Color3.fromRGB(30, 15, 20),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local stateLabel = UI.Label("", { Size = UDim2.new(1, -10, 0, 40), Position = UDim2.fromOffset(5, 2), Parent = top })
+local coinsLabel = UI.Label("", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.fromOffset(5, 44), TextColor3 = Color3.fromRGB(255, 215, 0), Parent = top })
+local targeted = UI.Label("⚠ TARGETED — PARRY! ⚠", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.3),
+	Size = UDim2.fromOffset(520, 56),
+	TextColor3 = Color3.fromRGB(255, 50, 50),
+	Visible = false,
+	Parent = gui,
+})
+local respawnButton = UI.Button("SECOND CHANCE  R$ 29", Color3.fromRGB(40, 200, 80), {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.62),
+	Size = UDim2.fromOffset(340, 80),
+	Visible = false,
+	Parent = gui,
+})
+respawnButton.Activated:Connect(function()
+	buy("Product", "Respawn")
+end)
+
+player.AttributeChanged:Connect(function()
+	coinsLabel.Text = Format.Abbreviate(player:GetAttribute("Coins") or 0) .. " coins  •  " .. (player:GetAttribute("Wins") or 0) .. " wins"
+end)
+coinsLabel.Text = "0 coins"
+
+task.spawn(function()
+	while true do
+		local roundState = workspace:GetAttribute("RoundState")
+		if roundState == "Playing" then
+			stateLabel.Text = (workspace:GetAttribute("AliveCount") or 0) .. " players alive"
+		elseif roundState == "Intermission" then
+			stateLabel.Text = "Next round in " .. (workspace:GetAttribute("TimeLeft") or 0)
+		elseif roundState == "Waiting" then
+			stateLabel.Text = "Waiting for players..."
+		else
+			stateLabel.Text = "Round over!"
+		end
+		local isTarget = ball:GetAttribute("TargetId") == player.UserId and player:GetAttribute("Alive") == true
+		targeted.Visible = isTarget
+		if isTarget then
+			targeted.TextTransparency = (math.sin(os.clock() * 20) + 1) * 0.25
+		end
+		respawnButton.Visible = roundState == "Playing" and not player:GetAttribute("Alive")
+		task.wait(0.05)
+	end
+end)
+
+---------------------------------------------------------------- parry + dash
+
+local lastParry = 0
+local function parry()
+	local now = os.clock()
+	if now - lastParry < 0.15 then
+		return
+	end
+	lastParry = now
+	local cam = workspace.CurrentCamera
+	remotes.Parry:FireServer(cam and cam.CFrame.LookVector or nil)
+end
+
+local lastDash = -100
+local function dash()
+	local cooldown = if player:GetAttribute("Pass_QuickDash") then 3 else Config.DashCooldown
+	if os.clock() - lastDash < cooldown then
+		toast("Dash ready in " .. math.ceil(cooldown - (os.clock() - lastDash)) .. "s", Color3.fromRGB(200, 200, 200))
+		return
+	end
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		lastDash = os.clock()
+		root.AssemblyLinearVelocity = root.CFrame.LookVector * 110 + Vector3.new(0, 12, 0)
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.F or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		parry()
+	elseif input.KeyCode == Enum.KeyCode.Q then
+		dash()
+	end
+end)
+
+local parryButton = UI.Button("PARRY", Color3.fromRGB(230, 50, 50), {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -20, 1, -130),
+	Size = UDim2.fromOffset(120, 120),
+	Parent = gui,
+})
+parryButton.Activated:Connect(parry)
+local dashButton = UI.Button("DASH", Color3.fromRGB(60, 120, 255), {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -150, 1, -140),
+	Size = UDim2.fromOffset(90, 90),
+	Parent = gui,
+})
+dashButton.Activated:Connect(dash)
+parryButton.Visible = UserInputService.TouchEnabled
+dashButton.Visible = UserInputService.TouchEnabled
+
+remotes:WaitForChild("ParryFx").OnClientEvent:Connect(function(position: Vector3)
+	local ring = Instance.new("Part")
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.CanTouch = false
+	ring.Shape = Enum.PartType.Ball
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.fromRGB(255, 255, 255)
+	ring.Transparency = 0.3
+	ring.Size = Vector3.one * 2
+	ring.Position = position
+	ring.Parent = workspace
+	TweenService:Create(ring, TweenInfo.new(0.3), { Size = Vector3.one * 12, Transparency = 1 }):Play()
+	Debris:AddItem(ring, 0.35)
+end)
+
+---------------------------------------------------------------- swords + crates
+
+local swordsFrame = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 520, 0.7, 0),
+	BackgroundColor3 = Color3.fromRGB(45, 25, 35),
+	Visible = false,
+	Parent = gui,
+}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+UI.Label("SWORDS", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = swordsFrame })
+UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = swordsFrame }).Activated:Connect(function()
+	swordsFrame.Visible = false
+end)
+local crateButton = UI.Button("OPEN CRATE (" .. Config.CrateCost .. " coins)", Color3.fromRGB(255, 170, 0), { Position = UDim2.fromOffset(16, 62), Size = UDim2.new(1, -32, 0, 54), Parent = swordsFrame })
+local oddsParts = {}
+for _, r in Config.Rarities do
+	table.insert(oddsParts, r.Name .. " " .. r.Weight .. "%")
+end
+UI.Label(table.concat(oddsParts, " • "), { Position = UDim2.fromOffset(16, 120), Size = UDim2.new(1, -32, 0, 22), Font = Enum.Font.GothamMedium, Parent = swordsFrame })
+local swordList = UI.new("ScrollingFrame", {
+	Position = UDim2.fromOffset(12, 150),
+	Size = UDim2.new(1, -24, 1, -162),
+	BackgroundTransparency = 1,
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	ScrollBarThickness = 8,
+	Parent = swordsFrame,
+})
+local swordLayout = Instance.new("UIListLayout")
+swordLayout.Padding = UDim.new(0, 6)
+swordLayout.SortOrder = Enum.SortOrder.LayoutOrder
+swordLayout.Parent = swordList
+
+local function renderSwords()
+	for _, c in swordList:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local owned = {}
+	for id in string.gmatch(player:GetAttribute("OwnedSwords") or "", "[^,]+") do
+		owned[id] = true
+	end
+	for i, sword in Config.Swords do
+		local has = owned[sword.Id]
+		local row = UI.new("Frame", { LayoutOrder = -i, Size = UDim2.new(1, -10, 0, 56), BackgroundColor3 = Color3.fromRGB(65, 40, 55), Parent = swordList }, { UI.Corner(10) })
+		UI.Label(if has then sword.Name else "??? (" .. sword.Rarity .. ")", { Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -150, 1, -8), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Config.RarityColor[sword.Rarity], Parent = row })
+		if has then
+			local equipped = player:GetAttribute("Sword") == sword.Id
+			local b = UI.Button(if equipped then "EQUIPPED" else "EQUIP", if equipped then Color3.fromRGB(90, 90, 90) else Color3.fromRGB(40, 180, 70), { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(120, 44), Parent = row })
+			b.Activated:Connect(function()
+				remotes.EquipSword:InvokeServer(sword.Id)
+			end)
+		end
+	end
+end
+player:GetAttributeChangedSignal("OwnedSwords"):Connect(function()
+	if swordsFrame.Visible then
+		renderSwords()
+	end
+end)
+player:GetAttributeChangedSignal("Sword"):Connect(function()
+	if swordsFrame.Visible then
+		renderSwords()
+	end
+end)
+
+crateButton.Activated:Connect(function()
+	local ok, result, duplicate = remotes.OpenCrate:InvokeServer()
+	if not ok then
+		toast(result, Color3.fromRGB(255, 90, 90))
+		buy("Product", "CoinsSmall")
+		return
+	end
+	local sword = Config.SwordById[result]
+	toast((if duplicate then "Duplicate (+25% refund): " else "NEW SWORD: ") .. sword.Name .. " (" .. sword.Rarity .. ")", Config.RarityColor[sword.Rarity])
+end)
+
+local side = ShopUI.SideBar(gui)
+UI.Button("SWORDS", Color3.fromRGB(255, 120, 40), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	shop.Visible = false
+	swordsFrame.Visible = not swordsFrame.Visible
+	if swordsFrame.Visible then
+		renderSwords()
+	end
+end)
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	swordsFrame.Visible = false
+	shop.Visible = not shop.Visible
+end)
+UI.Label("Click / F = Parry\nQ = Dash", { Size = UDim2.fromOffset(130, 50), Parent = side })
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>

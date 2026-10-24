@@ -15,6 +15,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Brainrot RNG** | Sol's RNG (aura rolling) | `build/BrainrotRNG.rbxlx` |
 | **Fish a Brainrot** | Fisch (fishing + reel minigame) | `build/FishABrainrot.rbxlx` |
 | **Brainrot Tower Defense** | Toilet Tower Defense (co-op waves + unit gacha) | `build/BrainrotTowerDefense.rbxlx` |
+| **Brainrot Ball** | Blade Ball (parry PvP + sword crates) | `build/BrainrotBall.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
@@ -34,6 +35,14 @@ More games are listed at the bottom as they get added.
      `ReplicatedStorage.Shared.Config` directly in Studio, then publish again.
 4. **Make it public**, then run Roblox **Ads / Sponsored experiences** with a small budget to get the first players.
    The algorithm only recommends games that already have players.
+
+### Which game to launch first
+1. **Yoink a Brainrot** and **Grow a Brainrot** copy the two biggest earners on Roblox right now. Start with one of these.
+2. **Survive Tung Tung Sahur** and **Brainrot Ball** are round-based and best with friends, which makes them good for TikTok/Shorts clips.
+3. The obby is the cheapest to run and earns steadily from Skip Stage. It's a good second or third game.
+
+Focus on one game at a time. Make an eye-catching icon (a big brainrot face plus bright text), run about 1,000 Robux of ads,
+watch the Analytics tab for retention, and push small updates often: new brainrots, seeds or units are one line in `Config.luau`.
 
 ### Where the money comes from
 - **Game passes:** one-time purchases (2x cash, VIP, auto clicker, extra slots and so on).
