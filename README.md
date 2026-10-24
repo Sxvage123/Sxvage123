@@ -1,0 +1,69 @@
+# Brainrot Game Factory
+
+Ready-to-publish Roblox games in the styles that currently earn the most (Steal a Brainrot, Grow a Garden,
+pet simulators, obbies). Every game builds its whole map, UI and characters from code, so you can open a
+file in Roblox Studio, hit Play, and it works. No models or assets are needed.
+
+| Game | Based on | Place file |
+|------|----------|------------|
+| **Yoink a Brainrot** | Steal a Brainrot | `build/YoinkABrainrot.rbxlx` |
+| **Hatch a Brainrot** | Pet / clicker simulators | `build/HatchABrainrot.rbxlx` |
+| **Escape the Brainrot Obby** | Skip-stage obbies | `build/EscapeTheBrainrotObby.rbxlx` |
+| **Grow a Brainrot** | Grow a Garden | `build/GrowABrainrot.rbxlx` |
+| **Brainrot Tycoon** | Classic dropper tycoons | `build/BrainrotTycoon.rbxlx` |
+
+More games are listed at the bottom as they get added.
+
+## How to publish one and start earning
+
+1. **Open it.** Double-click a `.rbxlx` from `build/` and it opens in Roblox Studio. Press **Play** to test.
+   Shop buttons work in Studio even before you set up IDs. They grant the item instantly so you can test.
+2. **Publish.** Go to File → Publish to Roblox. Then open Game Settings and do these three things:
+   - Security → turn on **Enable Studio Access to API Services**, so saving works in Studio.
+   - Places → set **Max Players**. Use 8 for Yoink a Brainrot (8 bases), and 6 for Grow a Brainrot and Brainrot Tycoon (6 plots each).
+   - Basic Info: pick a genre, then add a good **icon and thumbnails**. Thumbnails matter more than anything else for clicks.
+3. **Create the paid items.** In the Creator Dashboard, open your experience → Monetization:
+   - **Passes:** make one for each entry in that game's `src/shared/Config.luau` → `Config.Passes`.
+     Suggested prices are in `Config.PassInfo`.
+   - **Developer Products:** make one for each entry in `Config.Products`. Prices are in `Config.ProductInfo`.
+   - Paste each ID into `Config.luau`, replacing the `0`. Rebuild (see below) or edit the ModuleScript
+     `ReplicatedStorage.Shared.Config` directly in Studio, then publish again.
+4. **Make it public**, then run Roblox **Ads / Sponsored experiences** with a small budget to get the first players.
+   The algorithm only recommends games that already have players.
+
+### Where the money comes from
+- **Game passes:** one-time purchases (2x cash, VIP, auto clicker, extra slots and so on).
+- **Developer products:** repeat purchases (cash packs, server luck, skip stage, restock, summon secret).
+  These earn the most in all of these genres.
+- **Premium Payouts:** Roblox pays you automatically for time Premium players spend in your game.
+  Offline earnings, gifts, events and restocks are built in to keep players coming back.
+
+Server-wide boosts (2x Server Luck, Restock Shop, Summon Storm, Summon Secret) are announced to everyone with the
+buyer's name. That social proof is what makes these products sell in the real games.
+
+## Safe-by-default systems (`shared/`)
+- `shared/server/DataService.luau`: DataStore saving with session locking, so items can't be duplicated by
+  server-hopping. It also autosaves, saves on shutdown, and kicks the player instead of overwriting their data
+  when a load fails.
+- `shared/server/MonetizationService.luau`: `ProcessReceipt` done properly. Each purchase is granted exactly
+  once, and the save finishes before Roblox is told the purchase succeeded. It also handles pass ownership
+  and the Studio test purchases.
+- `shared/common/`: number formatting (1.2K, 3.4M…) and UI helpers.
+
+## Editing / rebuilding
+The games use [Rojo](https://rojo.space). To rebuild every place file:
+
+```bash
+scripts/build-all.sh            # needs `rojo` on PATH
+```
+
+For live-sync while editing in Studio, run `rojo serve games/<game>/default.project.json` and connect with the
+Rojo Studio plugin.
+
+Want real 3D models instead of the cartoon part-built ones? In Yoink a Brainrot, put a Model named after the
+brainrot's `Id` (for example `tung`), with a PrimaryPart, inside `ServerStorage.Brainrots`. The game uses it automatically.
+
+## Tuning tips
+- All the numbers are in each game's `Config.luau`: prices, income, spawn rates, rarities and so on.
+- Add new brainrots, pets, seeds or eggs by adding a line to the lists in `Config.luau`. Nothing else needs to change.
+- Change the `DataService.Init("..._v1", ...)` store name **only** if you want to wipe everyone's data.
