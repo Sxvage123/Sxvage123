@@ -26,6 +26,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Pet Breakers** | Pet Simulator 99 (pets break coins, areas, eggs, HUGE pets) | `build/PetBreakers.rbxlx` |
 | **Pizza Restaurant Tycoon** | My Restaurant (customers, ovens, staff, upgrades) | `build/PizzaRestaurantTycoon.rbxlx` |
 | **Squid Challenge** | Squid Game minigames (Red Light Green Light + Glass Bridge, revives) | `build/SquidChallenge.rbxlx` |
+| **+1 Speed Brainrot Race** | "+1 Speed Every Second" games (huge track, wins, trails, rebirths) | `build/SpeedBrainrotRace.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
