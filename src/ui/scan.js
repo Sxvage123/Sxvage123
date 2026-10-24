@@ -70,9 +70,9 @@ export function renderScan(root, app) {
             .reverse()
             .slice(0, 30)
             .map(
-              (s) => `<button class="scan-row" data-scan="${s.id}">
-                ${s.thumb ? `<img src="${s.thumb}" alt=""/>` : '<div class="ph">📏</div>'}
-                <div class="grow left"><b>${fmt(s.bodyFat, 1)}%</b> <span class="muted tiny">${s.low}–${s.high}%</span><div class="muted tiny">${esc(shortDay(s.date))} · ${methodLabel(s.method)}</div></div>
+              (s) => `<button class="scan-row" data-scan="${esc(s.id)}">
+                ${s.thumb ? `<img src="${esc(s.thumb)}" alt=""/>` : '<div class="ph">📏</div>'}
+                <div class="grow left"><b>${fmt(s.bodyFat, 1)}%</b> <span class="muted tiny">${fmt(s.low, 1)}–${fmt(s.high, 1)}%</span><div class="muted tiny">${esc(shortDay(s.date))} · ${methodLabel(s.method)}</div></div>
                 <span class="muted">›</span></button>`,
             )
             .join('')}</section>`
@@ -145,7 +145,7 @@ async function photoScanFlow(app) {
   const wantSide = await sheet((el, close) => {
     el.innerHTML = `
       <div class="center">
-        <img class="overlay-img sm" src="${frontResult.overlay}" alt=""/>
+        <img class="overlay-img sm" src="${esc(frontResult.overlay)}" alt=""/>
         <h2 class="sheet-title">Front scan locked in ✅</h2>
         <p class="muted small">Add a <b>side photo</b> so the AI can measure your waist depth too. It noticeably improves accuracy.</p>
       </div>
@@ -186,7 +186,7 @@ async function runAnalysis(source, view, optional = false) {
       closeLoader = close;
       el.innerHTML = `
       <div class="analyzing">
-        <div class="scan-frame tall"><img src="${thumb}" alt=""/><div class="scan-line"></div></div>
+        <div class="scan-frame tall"><img src="${esc(thumb)}" alt=""/><div class="scan-line"></div></div>
         <b>Scanning ${view} view…</b>
         <span class="muted small">Detecting pose & body outline</span>
       </div>`;
@@ -330,10 +330,10 @@ function showResult(app, scan, { overlay, prevBest, fresh }) {
     (el, close) => {
       el.innerHTML = `
       <div class="result">
-        ${overlay ? `<img class="overlay-img" src="${overlay}" alt="Scan overlay"/>` : ''}
+        ${overlay ? `<img class="overlay-img" src="${esc(overlay)}" alt="Scan overlay"/>` : ''}
         ${newLow ? '<div class="new-low">🏆 NEW PERSONAL BEST</div>' : ''}
         <div class="bf-num big">${fmt(scan.bodyFat, 1)}<span>%</span></div>
-        <div class="muted small">Likely range ${scan.low}–${scan.high}% · ${methodLabel(scan.method)}</div>
+        <div class="muted small">Likely range ${fmt(scan.low, 1)}–${fmt(scan.high, 1)}% · ${methodLabel(scan.method)}</div>
         <div class="bf-cat" style="color:${cat.color}">${esc(cat.label)}</div>
         ${scaleBar(p.sex, scan.bodyFat)}
         <div class="stat-grid">
@@ -345,7 +345,7 @@ function showResult(app, scan, { overlay, prevBest, fresh }) {
         ${nextCat && loseKg > 0.2 ? `<div class="card goal-card">🎯 Lose about <b>${showWt(app, loseKg)}</b> of fat (keeping your muscle) to reach <b style="color:${nextCat.color}">${esc(nextCat.label)}</b> (${target}%).</div>` : ''}
         ${(scan.warnings || []).map((w) => `<div class="banner">${esc(WARNING_TEXT[w] || w)}</div>`).join('')}
         ${scan.method === 'photo' ? '<p class="muted tiny">Tip: add a side photo next time, or do a tape scan on the same day to calibrate photo scans to you.</p>' : ''}
-        ${scan.navy ? `<p class="muted tiny">RFM ${scan.rfm}% · Navy ${scan.navy}% (averaged)</p>` : ''}
+        ${scan.navy ? `<p class="muted tiny">RFM ${fmt(scan.rfm, 1)}% · Navy ${fmt(scan.navy, 1)}% (averaged)</p>` : ''}
         <div class="row gap mt">
           ${fresh ? '' : '<button class="btn btn-danger" data-del>Delete</button>'}
           <button class="btn btn-primary grow" data-ok>${fresh ? 'Claim XP 💪' : 'Close'}</button>

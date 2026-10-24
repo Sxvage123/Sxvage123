@@ -193,3 +193,23 @@ test('scan XP: same-day calibration scan does not pay a new-low bonus', () => {
   ];
   assert.equal(scanXP(t).get('2026-03-08').reduce((a, i) => a + i.xp, 0), 50);
 });
+
+test('rank boundaries are integers and Legend has a tier', () => {
+  for (let xp = 0; xp < 26000; xp += 1) {
+    const r = rankFor(xp);
+    if (r.nextAt !== null) assert.ok(r.nextAt - xp > 0, `xp ${xp} says ${r.nextAt - xp} to next`);
+  }
+  assert.equal(rankFor(25000).tier, 24);
+  assert.ok(rankFor(25000).tier > rankFor(24999).tier);
+});
+
+test('back-dated meals count for nutrition but not XP or streaks', () => {
+  const s = blank();
+  const today = '2026-03-10';
+  s.meals.push({ ...meal('2026-03-09', 600, 60), loggedOn: today });
+  s.meals.push({ ...meal(today, 500, 50), loggedOn: today });
+  const stats = computeStats(s, today);
+  assert.equal(stats.streak.current, 1);
+  assert.equal(stats.xpByDay.get('2026-03-09'), undefined);
+  assert.equal(stats.xp, 10);
+});

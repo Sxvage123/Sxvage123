@@ -129,11 +129,11 @@ function challengeCard(ch, app) {
   <section class="card challenge ${ch.done ? 'done' : ''} ${ch.boss ? 'boss' : ''}">
     <div class="challenge-top">
       <span class="tag">${ch.boss ? '☠️ SUNDAY BOSS' : '⚔️ DAILY CHALLENGE'}</span>
-      <span class="diff diff-${ch.difficulty}">${ch.difficulty}</span>
-      <span class="xp-pill ${ch.done ? 'earned' : ''}">+${ch.xp} XP</span>
+      <span class="diff diff-${esc(ch.difficulty)}">${esc(ch.difficulty)}</span>
+      <span class="xp-pill ${ch.done ? 'earned' : ''}">+${fmt(ch.xp)} XP</span>
     </div>
     <div class="challenge-main">
-      <div class="challenge-icon">${ch.icon || '🎯'}</div>
+      <div class="challenge-icon">${esc(ch.icon || '🎯')}</div>
       <div class="grow">
         <h2 class="challenge-title">${esc(ch.title)}</h2>
         <p class="muted small">${esc(ch.description)}</p>

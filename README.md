@@ -77,7 +77,7 @@ cd android && ./gradlew assembleRelease
 # → android/app/build/outputs/apk/release/app-release.apk
 ```
 
-The APK is signed with the committed dev key `android/app/grindfit-dev.jks` so each build installs over the previous one. Make your own key before publishing to an app store.
+Release signing reads `android/keystore.properties` (git-ignored: `storeFile`, `storePassword`, `keyAlias`, `keyPassword`). Without it, the build signs with your local debug key. Keep the key safe: Android only installs updates signed with the same key.
 
 ## Project layout
 

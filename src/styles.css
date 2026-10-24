@@ -521,3 +521,4 @@ details.cat summary::-webkit-details-marker { display: none; }
 .guide-step > span { font-size: 28px; width: 44px; text-align: center; flex: none; }
 .guide-step b { display: block; }
 .guide-step small { color: var(--muted); font-size: 13px; }
+.banner.subtle { background: var(--card); border-color: var(--line); color: var(--muted); font-size: 13px; }

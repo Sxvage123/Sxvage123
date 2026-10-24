@@ -36,12 +36,14 @@ export function rankFor(xp) {
   const rank = RANKS[index];
   const next = RANKS[index + 1];
   if (!next) {
-    return { ...rank, index, division: '', title: rank.name, progress: 1, floor: rank.min, nextAt: null, nextTitle: null };
+    return { ...rank, index, division: '', title: rank.name, tier: index * 3, progress: 1, floor: rank.min, nextAt: null, nextTitle: null };
   }
+  // Integer division thresholds, so the UI never says "0 XP to the next division".
   const span = (next.min - rank.min) / 3;
-  const div = Math.min(2, Math.floor((xp - rank.min) / span));
-  const floor = rank.min + div * span;
-  const nextAt = Math.round(floor + span);
+  const cuts = [rank.min, Math.round(rank.min + span), Math.round(rank.min + 2 * span), next.min];
+  const div = xp >= cuts[2] ? 2 : xp >= cuts[1] ? 1 : 0;
+  const floor = cuts[div];
+  const nextAt = cuts[div + 1];
   const nextTitle = div < 2 ? `${rank.name} ${DIVISIONS[div + 1]}` : `${next.name}${RANKS[index + 2] ? ' III' : ''}`;
   return {
     ...rank,
@@ -49,8 +51,8 @@ export function rankFor(xp) {
     division: DIVISIONS[div],
     title: `${rank.name} ${DIVISIONS[div]}`,
     tier: index * 3 + div, // monotonic number for "did I rank up?"
-    progress: (xp - floor) / span,
-    floor: Math.round(floor),
+    progress: (xp - floor) / (nextAt - floor),
+    floor,
     nextAt,
     nextTitle,
   };
@@ -75,9 +77,13 @@ export function mealsOn(state, date) {
   return state.meals.filter((m) => m.date === date);
 }
 
-export function dayTotals(state, date) {
+// Meals logged on a later day ("back-dated") still count for nutrition, but not for XP or streaks.
+export const countsForXP = (m) => !m.loggedOn || m.loggedOn === m.date;
+
+export function dayTotals(state, date, { xpOnly = false } = {}) {
   const t = { calories: 0, protein: 0, carbs: 0, fat: 0, meals: 0 };
   for (const m of mealsOn(state, date)) {
+    if (xpOnly && !countsForXP(m)) continue;
     t.calories += m.calories || 0;
     t.protein += m.protein || 0;
     t.carbs += m.carbs || 0;
@@ -96,7 +102,7 @@ export function caloriesOnTarget(state, totals) {
 
 // The three automatic daily quests. Each is verified from the food log.
 export function dailyQuests(state, date) {
-  const t = dayTotals(state, date);
+  const t = dayTotals(state, date, { xpOnly: true });
   const p = state.profile || {};
   const [lo, hi] = TARGET_WINDOW[p.goal] || TARGET_WINDOW.maintain;
   return [
@@ -133,7 +139,7 @@ export function dailyQuests(state, date) {
 export function challengeProgress(state, date) {
   const c = state.challenges[date];
   if (!c) return null;
-  const t = dayTotals(state, date);
+  const t = dayTotals(state, date, { xpOnly: true });
   let current = 0;
   let auto = true;
   switch (c.metric) {
@@ -161,7 +167,7 @@ export function challengeProgress(state, date) {
 
 export function activeDays(state) {
   const days = new Set();
-  for (const m of state.meals) days.add(m.date);
+  for (const m of state.meals) if (countsForXP(m)) days.add(m.date);
   for (const s of state.scans) days.add(s.date);
   for (const [d, c] of Object.entries(state.challenges)) if (c.done) days.add(d);
   return days;
@@ -211,7 +217,7 @@ export function streakMultiplier(streakDays) {
 
 export function dayXP(state, date, streak) {
   const items = [];
-  const meals = mealsOn(state, date).length;
+  const meals = mealsOn(state, date).filter(countsForXP).length;
   if (meals) items.push({ label: `${Math.min(meals, XP.mealCap)} meal${meals > 1 ? 's' : ''} logged`, xp: Math.min(meals, XP.mealCap) * XP.meal });
   for (const q of dailyQuests(state, date)) if (q.done) items.push({ label: q.title, xp: q.xp });
   const ch = challengeProgress(state, date);

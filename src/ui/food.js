@@ -43,6 +43,7 @@ export function renderFood(root, app) {
     <b>${esc(formatDay(viewDate, app.today))}</b>
     <button class="icon-btn" data-day="1" ${viewDate >= app.today ? 'disabled' : ''} aria-label="Next day">›</button>
   </div>
+  ${viewDate < app.today ? '<div class="banner subtle">Editing a past day. Back-dated entries count toward your nutrition stats but don’t earn XP or streak days.</div>' : ''}
   <section class="card food-summary">
     ${ring({ value: t.calories, max: p.calorieGoal, size: 112, stroke: 11, children: `<div class="ring-num sm">${fmt(Math.abs(remaining))}</div><div class="ring-label">${remaining >= 0 ? 'left' : 'over'}</div>` })}
     <div class="grow">
@@ -88,7 +89,7 @@ export function renderFood(root, app) {
         const prev = mealsOn(app.state, addDays(viewDate, -1)).filter((m) => (m.mealType || 'snack') === type);
         const time = viewDate === app.today ? new Date().toISOString() : `${viewDate}T12:00:00`;
         app.update((s) => {
-          for (const m of prev) s.meals.push({ ...m, id: uid(), date: viewDate, time });
+          for (const m of prev) s.meals.push({ ...m, id: uid(), date: viewDate, time, loggedOn: app.today });
         });
         haptic('success');
         toast(`Logged ${prev.length} item${prev.length > 1 ? 's' : ''} from yesterday`, { icon: '↻' });
@@ -98,8 +99,8 @@ export function renderFood(root, app) {
 
 function mealRow(m) {
   return `
-  <button class="meal-row" data-meal="${m.id}">
-    ${m.thumb ? `<img class="meal-thumb" src="${m.thumb}" alt=""/>` : `<div class="meal-thumb ph">${m.source === 'barcode' ? '▥' : '🍽️'}</div>`}
+  <button class="meal-row" data-meal="${esc(m.id)}">
+    ${m.thumb ? `<img class="meal-thumb" src="${esc(m.thumb)}" alt=""/>` : `<div class="meal-thumb ph">${m.source === 'barcode' ? '▥' : '🍽️'}</div>`}
     <div class="grow left">
       <div class="meal-name">${esc(m.name)}</div>
       <div class="muted tiny">${esc(m.servingText || '')}${m.servingText ? ' · ' : ''}P ${fmt(m.protein)} · C ${fmt(m.carbs)} · F ${fmt(m.fat)}</div>
@@ -178,6 +179,7 @@ function logEntries(app, ctx, entries) {
         carbs: round1(f.carbs * k),
         fat: round1(f.fat * k),
         foodId: f.id,
+        loggedOn: app.today,
         source: e.source,
         thumb: e.thumb || null,
         estimated: !!e.estimated,
@@ -224,7 +226,7 @@ function foodDetail(body, app, food, { source, thumb, estimated, onBack, done })
     body.innerHTML = `
       <button class="link-btn" data-back>‹ Back</button>
       <div class="food-detail">
-        ${thumb ? `<img class="detail-img" src="${thumb}" alt=""/>` : ''}
+        ${thumb ? `<img class="detail-img" src="${esc(thumb)}" alt=""/>` : ''}
         <h3 class="food-title">${esc(food.name)}</h3>
         <div class="muted small">${esc(food.serving)} per serving${food.brand ? ` · ${esc(food.brand)}` : ''}${estimated ? ' · <span class="warn-text">rough estimate</span>' : ''}</div>
         <div class="detail-kcal"><b data-kcal>${fmt(food.calories * k)}</b><span>kcal</span></div>
@@ -299,7 +301,7 @@ function snapPane(body, app, ctx, done) {
     const thumb = thumbnail(canvas, 200);
     body.innerHTML = `
       <div class="analyzing">
-        <div class="scan-frame"><img src="${thumb}" alt=""/><div class="scan-line"></div></div>
+        <div class="scan-frame"><img src="${esc(thumb)}" alt=""/><div class="scan-line"></div></div>
         <b>Analyzing your food…</b>
         <span class="muted small" data-status>Loading AI model (first time takes a few seconds)</span>
       </div>`;
@@ -336,7 +338,7 @@ function showPredictions(body, app, ctx, preds, thumb, done, retake) {
     const kcal = sel.reduce((s, i) => s + i.food.calories * i.servings, 0);
     body.innerHTML = `
       <div class="pred-head">
-        <img class="pred-img" src="${thumb}" alt=""/>
+        <img class="pred-img" src="${esc(thumb)}" alt=""/>
         <div class="grow">
           <b>${items.length ? (confident ? 'Looks like…' : 'Best guesses') : 'Hmm, not sure what that is'}</b>
           <p class="muted tiny">${items.length ? 'Tap everything on your plate, then adjust servings.' : 'Try another angle or search instead.'}</p>
@@ -432,14 +434,19 @@ function searchPane(body, app, ctx, done, initial = '') {
       ni.setSelectionRange(pos, pos);
     }, 180);
     body.querySelector('[data-online]')?.addEventListener('click', async () => {
+      const asked = query;
       onlineState = 'loading';
       draw();
+      let results = [];
+      let state2 = 'done';
       try {
-        online = await searchOnline(query);
-        onlineState = 'done';
+        results = await searchOnline(asked);
       } catch {
-        onlineState = 'error';
+        state2 = 'error';
       }
+      if (asked !== query || !body.isConnected) return; // the user typed something else meanwhile
+      online = results;
+      onlineState = state2;
       draw();
     });
     body.querySelector('[data-quick]')?.addEventListener('click', () => quickPane(body, app, ctx, done, query));
@@ -551,9 +558,13 @@ function quickPane(body, app, ctx, done, name = '') {
     const p = v('[data-p]');
     const c = v('[data-c]');
     const f = v('[data-f]');
+    if (p < 0 || c < 0 || f < 0 || kcal < 0) {
+      body.querySelector('[data-err]').textContent = 'Values can’t be negative.';
+      return;
+    }
     if (!kcal && (p || c || f)) kcal = Math.round(p * 4 + c * 4 + f * 9);
-    if (!kcal || kcal > 10000) {
-      body.querySelector('[data-err]').textContent = 'Enter calories (or macros).';
+    if (!kcal || kcal > 10000 || p > 1000 || c > 2000 || f > 1000) {
+      body.querySelector('[data-err]').textContent = 'Enter calories (or macros) between 1 and 10,000.';
       return;
     }
     const food = { id: `c${uid()}`, name: n.slice(0, 60), serving: '1 serving', calories: Math.round(kcal), protein: p, carbs: c, fat: f, category: 'My foods', aliases: [] };
@@ -574,7 +585,7 @@ function editMeal(app, id) {
   sheet((el, close) => {
     el.innerHTML = `
       <div class="food-detail">
-        ${m.thumb ? `<img class="detail-img" src="${m.thumb}" alt=""/>` : ''}
+        ${m.thumb ? `<img class="detail-img" src="${esc(m.thumb)}" alt=""/>` : ''}
         <h3 class="food-title">${esc(m.name)}</h3>
         <div class="muted small">${esc(per.serving)} per serving${m.estimated ? ' · <span class="warn-text">rough estimate</span>' : ''}</div>
         <div class="detail-kcal"><b data-kcal>${fmt(per.calories * k)}</b><span>kcal</span></div>

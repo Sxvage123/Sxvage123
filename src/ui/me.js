@@ -90,6 +90,7 @@ export function renderMe(root, app) {
     document.querySelector('#app').innerHTML = '';
     app.refresh();
     app.render();
+    app.scheduleReminders(); // cancels pending streak/challenge notifications
   };
   root.querySelector('[data-about]').onclick = () => aboutSheet();
   root.querySelector('[data-guide]').onclick = () => showGuide();
@@ -115,8 +116,11 @@ const EDITORS = {
         <button class="btn btn-primary btn-block btn-lg" data-save>Save</button>`;
       el.querySelector('[data-save]').onclick = () => {
         const v = (s) => Number(el.querySelector(s)?.value) || 0;
-        const heightCm = imp ? inToCm(v('[data-ft]') * 12 + v('[data-in]')) : v('[data-cm]');
-        const weightKg = imp ? lbToKg(v('[data-w]')) : v('[data-w]');
+        // Only convert values the user actually changed, so unit rounding never drifts stored height/weight.
+        const hChanged = imp ? v('[data-ft]') !== ft || v('[data-in]') !== inch : v('[data-cm]') !== p.heightCm;
+        const heightCm = hChanged ? (imp ? inToCm(v('[data-ft]') * 12 + v('[data-in]')) : v('[data-cm]')) : p.heightCm;
+        const wShown = imp ? Math.round(kgToLb(p.weightKg) * 10) / 10 : p.weightKg;
+        const weightKg = v('[data-w]') !== wShown ? (imp ? lbToKg(v('[data-w]')) : v('[data-w]')) : p.weightKg;
         const age = v('[data-age]');
         const name = el.querySelector('[data-name]').value.trim();
         const err = !name ? 'Enter a name.' : age < 13 || age > 100 ? 'Age must be 13–100.' : heightCm < 120 || heightCm > 230 ? 'Check your height.' : weightKg < 30 || weightKg > 300 ? 'Check your weight.' : '';

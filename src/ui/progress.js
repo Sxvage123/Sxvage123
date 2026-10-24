@@ -170,8 +170,8 @@ function trendSection(sec, app) {
     ${
       photos.length
         ? `<section class="card"><div class="card-head"><h3>Progress photos</h3><span class="muted small">private · on device</span></div>
-          ${photos.length >= 2 ? `<div class="compare"><figure><img src="${photos[0].thumb}" alt=""/><figcaption>${esc(shortDay(photos[0].date))} · ${photos[0].bodyFat}%</figcaption></figure><figure><img src="${photos[photos.length - 1].thumb}" alt=""/><figcaption>${esc(shortDay(photos[photos.length - 1].date))} · ${photos[photos.length - 1].bodyFat}%</figcaption></figure></div>` : ''}
-          <div class="gallery">${photos.slice(-12).reverse().map((s) => `<img src="${s.thumb}" alt=""/>`).join('')}</div></section>`
+          ${photos.length >= 2 ? `<div class="compare"><figure><img src="${esc(photos[0].thumb)}" alt=""/><figcaption>${esc(shortDay(photos[0].date))} · ${fmt(photos[0].bodyFat, 1)}%</figcaption></figure><figure><img src="${esc(photos[photos.length - 1].thumb)}" alt=""/><figcaption>${esc(shortDay(photos[photos.length - 1].date))} · ${fmt(photos[photos.length - 1].bodyFat, 1)}%</figcaption></figure></div>` : ''}
+          <div class="gallery">${photos.slice(-12).reverse().map((s) => `<img src="${esc(s.thumb)}" alt=""/>`).join('')}</div></section>`
         : ''
     }`;
   sec.querySelector('[data-weigh]').onclick = () => logWeight(app);

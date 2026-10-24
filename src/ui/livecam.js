@@ -146,14 +146,25 @@ export function liveCapture({ view = 'front', facing = 'environment' } = {}) {
       }
     };
 
+    let startToken = 0;
     const start = async () => {
+      const token = ++startToken;
       stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      let s;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 1920 } }, audio: false });
+        s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 1920 } }, audio: false });
       } catch (e) {
+        if (closed || token !== startToken) return;
         status.innerHTML = `Camera unavailable: ${esc(e.message || e.name)}<br/><small>Allow camera access in Settings, or use “Upload photo”.</small>`;
         return;
       }
+      // Closed or flipped while the camera was starting: release this stream immediately.
+      if (closed || token !== startToken) {
+        s.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      stream = s;
       video.srcObject = stream;
       video.classList.toggle('mirror', facing === 'user');
       await video.play().catch(() => {});
