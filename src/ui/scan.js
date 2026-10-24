@@ -262,7 +262,6 @@ function tapeFlow(app) {
 // ---------- save + result ----------
 
 async function saveScan(app, est, { thumb = null, overlay = null, warnings = [], calibrateFrom = null } = {}) {
-  const p = app.state.profile;
   // Confirm current weight (keeps calorie targets fresh and powers lean-mass stats).
   const weightKg = await askWeight(app);
   const id = uid();

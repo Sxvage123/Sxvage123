@@ -151,6 +151,17 @@ export const app = {
     renderTabbar(this);
   },
 
+  async ensureNotificationPermission() {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      const p = await LocalNotifications.checkPermissions();
+      if (p.display === 'prompt' || p.display === 'prompt-with-rationale') await LocalNotifications.requestPermissions();
+    } catch {
+      /* not fatal */
+    }
+    this.scheduleReminders();
+  },
+
   async scheduleReminders() {
     if (!Capacitor.isNativePlatform()) return;
     try {

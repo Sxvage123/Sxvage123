@@ -1,7 +1,7 @@
 // The grind engine. Every number here is derived from the logged data (meals, scans,
 // challenges), so XP can never drift out of sync or be double-awarded.
 
-import { addDays, daysBetween, dayKey, weekStart, weekDays } from './dates.js';
+import { addDays, daysBetween, dayKey, weekDays } from './dates.js';
 import { TARGET_WINDOW } from './nutrition.js';
 
 export const RANKS = [

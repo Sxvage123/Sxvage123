@@ -4,7 +4,6 @@ import { esc, fmt, ring, bar, confirmDialog, haptic, toast, sheet } from './dom.
 import { rankEmblem } from './charts.js';
 import { dayTotals, dailyQuests, challengeProgress, streakMultiplier } from '../lib/game.js';
 import { standings, LEAGUES, weekProgress } from '../lib/league.js';
-import { weekStart } from '../lib/dates.js';
 import { openAddFood } from './food.js';
 import { openLeague } from './progress.js';
 
@@ -54,7 +53,7 @@ export function renderHome(root, app) {
       : ''
   }
 
-  ${ch ? challengeCard(ch, app) : ''}
+  ${ch ? challengeCard(ch) : ''}
 
   <section class="card today-card">
     <div class="today-ring" data-go="food">
@@ -123,8 +122,7 @@ function macroRow(label, value, goal, color) {
   return `<div class="macro-row"><div class="macro-label"><span>${label}</span><b>${fmt(value)}<small>/${fmt(goal)}g</small></b></div>${bar(value, goal, color)}</div>`;
 }
 
-function challengeCard(ch, app) {
-  const pct = ch.auto ? Math.min(100, (ch.current / ch.target) * 100) : ch.done ? 100 : 0;
+function challengeCard(ch) {
   return `
   <section class="card challenge ${ch.done ? 'done' : ''} ${ch.boss ? 'boss' : ''}">
     <div class="challenge-top">

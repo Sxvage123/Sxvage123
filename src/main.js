@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { app } from './app.js';
 import { loadState, flush, saveState } from './store.js';
 import { migrateInlineThumbs } from './thumbs.js';
@@ -53,12 +52,8 @@ async function boot() {
       }
       app.scheduleReminders();
     });
-    if (app.state.settings.reminders) {
-      LocalNotifications.checkPermissions()
-        .then((p) => (p.display === 'prompt' || p.display === 'prompt-with-rationale' ? LocalNotifications.requestPermissions() : p))
-        .then(() => app.scheduleReminders())
-        .catch(() => {});
-    }
+    // Ask for notification permission only once the user is set up (onboarding asks right after it finishes).
+    if (app.state.profile && app.state.settings.reminders) app.ensureNotificationPermission();
   }
   window.addEventListener('beforeunload', () => flush());
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());

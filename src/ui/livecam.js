@@ -172,7 +172,7 @@ export function liveCapture({ view = 'front', facing = 'environment' } = {}) {
       try {
         model ||= await loadVideoPoseModel();
         status.textContent = 'Step back until your whole body fits';
-      } catch (e) {
+      } catch {
         status.textContent = 'Pose guide unavailable — use the shutter button';
       }
       cancelAnimationFrame(raf);

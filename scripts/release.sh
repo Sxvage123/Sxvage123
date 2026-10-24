@@ -9,6 +9,7 @@ GRADLE=android/app/build.gradle
 CODE=$(( $(grep -oP 'versionCode \K\d+' "$GRADLE") + 1 ))
 sed -i -E "s/versionCode [0-9]+/versionCode $CODE/; s/versionName \"[^\"]+\"/versionName \"$VERSION\"/" "$GRADLE"
 sed -i -E "s/const APP_VERSION = '[^']+'/const APP_VERSION = '$VERSION'/" src/version.js
+npm run lint
 npm test
 npm run build
 npx cap sync android

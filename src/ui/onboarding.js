@@ -58,7 +58,7 @@ export function renderOnboarding(root, app) {
       });
       draft = null;
       step = 0;
-      setTimeout(() => showGuide(), 400);
+      setTimeout(() => showGuide({ afterOnboarding: true, app }), 400);
       return;
     }
     step += 1;
@@ -207,7 +207,7 @@ const BODY = {
   },
 };
 
-export function showGuide() {
+export function showGuide({ afterOnboarding = false, app = null } = {}) {
   return sheet((el, close) => {
     el.innerHTML = `
       <h2 class="sheet-title">How to grind 🎮</h2>
@@ -217,6 +217,10 @@ export function showGuide() {
       <div class="guide-step"><span>🔥</span><div><b>Keep the streak alive</b><small>Every streak day adds +5% XP (up to ×1.5). Every 7 days earns a freeze that protects a missed day.</small></div></div>
       <div class="guide-step"><span>🏆</span><div><b>Climb the league</b><small>Finish top 3 in your weekly league to get promoted. The bottom 3 drop down.</small></div></div>
       <button class="btn btn-primary btn-block btn-lg mt" data-ok>Let’s get it</button>`;
-    el.querySelector('[data-ok]').onclick = () => close();
+    el.querySelector('[data-ok]').onclick = () => {
+      close();
+      // Streak reminders are a core loop; ask for notification permission at the moment it makes sense.
+      if (afterOnboarding && app) setTimeout(() => app.ensureNotificationPermission(), 400);
+    };
   });
 }

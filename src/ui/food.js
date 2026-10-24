@@ -1,6 +1,6 @@
 // Food log + the add-food sheet (snap with on-device AI, search, barcode, quick add).
 
-import { esc, fmt, ring, bar, sheet, toast, haptic, confirmDialog, debounce, $ } from './dom.js';
+import { esc, fmt, ring, sheet, toast, haptic, confirmDialog, debounce } from './dom.js';
 import { dayTotals, mealsOn } from '../lib/game.js';
 import { addDays, formatDay } from '../lib/dates.js';
 import { FOODS, FOOD_CATEGORIES, searchFoods, foodForLabel, IMAGENET_FOODS } from '../lib/foods.js';
@@ -512,7 +512,7 @@ function barcodePane(body, app, ctx, done) {
         return;
       }
       foodDetail(body, app, food, { source: 'barcode', onBack: () => barcodePane(body, app, ctx, done), done });
-    } catch (e) {
+    } catch {
       msg.textContent = 'Couldn’t reach Open Food Facts. Check your connection.';
     }
   };
