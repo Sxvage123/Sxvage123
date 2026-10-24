@@ -1,0 +1,1742 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="4">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Hatch a Brainrot: click for Brainpower, hatch eggs for brainrot pets that multiply clicks.
+-- Replace the 0s with your real Game Pass / Developer Product IDs.
+local Config = {}
+
+Config.Passes = {
+	AutoClick = 0,
+	DoubleClicks = 0,
+	TripleHatch = 0,
+	Lucky = 0,
+	MoreEquips = 0,
+	MoreStorage = 0,
+}
+
+Config.PassInfo = {
+	{ Key = "AutoClick", Name = "Auto Clicker", Price = 149, Description = "Clicks for you 6 times a second, even AFK" },
+	{ Key = "DoubleClicks", Name = "2x Brainpower", Price = 199, Description = "Double Brainpower forever" },
+	{ Key = "TripleHatch", Name = "Triple Hatch", Price = 249, Description = "Hatch 3 eggs at once" },
+	{ Key = "Lucky", Name = "Lucky", Price = 199, Description = "1.5x luck on every egg" },
+	{ Key = "MoreEquips", Name = "+3 Equips", Price = 149, Description = "Equip 3 more pets" },
+	{ Key = "MoreStorage", Name = "+100 Storage", Price = 49, Description = "Hold 100 more pets" },
+}
+
+Config.Products = {
+	PowerSmall = 0,
+	PowerLarge = 0,
+	LuckBoost = 0,
+	SuperLuckBoost = 0,
+	SecretEgg = 0,
+}
+
+Config.ProductInfo = {
+	{ Key = "PowerSmall", Name = "Brain Snack", Price = 25, Description = "15 minutes of clicking (min 1K)" },
+	{ Key = "PowerLarge", Name = "Brain Feast", Price = 149, Description = "3 hours of clicking (min 100K)" },
+	{ Key = "LuckBoost", Name = "2x Luck (30m)", Price = 49, Description = "Double your hatch luck for 30 minutes" },
+	{ Key = "SuperLuckBoost", Name = "5x Luck (15m)", Price = 149, Description = "QUINTUPLE luck for 15 minutes" },
+	{ Key = "SecretEgg", Name = "Secret Egg", Price = 99, Description = "Guaranteed Mythic or better pet!" },
+}
+
+Config.MaxClicksPerSecond = 16
+Config.AutoClicksPerSecond = 6
+Config.BaseEquips = 4
+Config.ExtraEquips = 3
+Config.BaseStorage = 60
+Config.ExtraStorage = 100
+Config.RebirthBaseCost = 50_000
+Config.RebirthCostGrowth = 3
+Config.RebirthBonus = 1 -- +100% per rebirth
+Config.GiftEverySeconds = 300
+
+Config.Rarities = {
+	Common = Color3.fromRGB(200, 200, 200),
+	Uncommon = Color3.fromRGB(90, 220, 90),
+	Rare = Color3.fromRGB(60, 140, 255),
+	Epic = Color3.fromRGB(170, 70, 255),
+	Legendary = Color3.fromRGB(255, 200, 0),
+	Mythic = Color3.fromRGB(255, 50, 50),
+	Secret = Color3.fromRGB(255, 0, 170),
+}
+Config.RarityOrder = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret" }
+
+-- Multiplier: how much each equipped pet adds to click power.
+Config.Pets = {
+	-- Brainrot Egg
+	{ Id = "noobini", Name = "Noobini", Rarity = "Common", Multiplier = 1.2, Color = Color3.fromRGB(255, 180, 90) },
+	{ Id = "pizzanini", Name = "Pizzanini", Rarity = "Uncommon", Multiplier = 1.6, Color = Color3.fromRGB(255, 90, 60) },
+	{ Id = "lirili", Name = "Lirili Larila", Rarity = "Rare", Multiplier = 2.5, Color = Color3.fromRGB(120, 200, 90) },
+	{ Id = "tim", Name = "Tim Cheese", Rarity = "Epic", Multiplier = 4, Color = Color3.fromRGB(255, 230, 80) },
+	-- Sahur Egg
+	{ Id = "tung", Name = "Tung Tung Sahur", Rarity = "Common", Multiplier = 3, Color = Color3.fromRGB(190, 130, 70) },
+	{ Id = "tralala", Name = "Tralalero", Rarity = "Uncommon", Multiplier = 4.5, Color = Color3.fromRGB(70, 160, 255) },
+	{ Id = "patapim", Name = "Brr Brr Patapim", Rarity = "Rare", Multiplier = 7, Color = Color3.fromRGB(70, 140, 60) },
+	{ Id = "ballerina", Name = "Ballerina Cappuccina", Rarity = "Legendary", Multiplier = 15, Color = Color3.fromRGB(240, 210, 180) },
+	-- Crocodilo Egg
+	{ Id = "bombardiro", Name = "Bombardiro", Rarity = "Uncommon", Multiplier = 12, Color = Color3.fromRGB(60, 120, 60) },
+	{ Id = "chimpanzini", Name = "Chimpanzini", Rarity = "Rare", Multiplier = 18, Color = Color3.fromRGB(255, 220, 40) },
+	{ Id = "frigo", Name = "Frigo Camelo", Rarity = "Epic", Multiplier = 28, Color = Color3.fromRGB(200, 240, 255) },
+	{ Id = "cappuccino", Name = "Cappuccino Assassino", Rarity = "Legendary", Multiplier = 55, Color = Color3.fromRGB(110, 70, 40) },
+	-- Sigma Egg
+	{ Id = "skibidi", Name = "Skibidi Head", Rarity = "Rare", Multiplier = 60, Color = Color3.fromRGB(230, 230, 230) },
+	{ Id = "rizzler", Name = "Rizzler", Rarity = "Epic", Multiplier = 100, Color = Color3.fromRGB(255, 140, 200) },
+	{ Id = "gyatt", Name = "Gyatt Gator", Rarity = "Legendary", Multiplier = 180, Color = Color3.fromRGB(60, 200, 120) },
+	{ Id = "sigma", Name = "Sigma Supreme", Rarity = "Mythic", Multiplier = 400, Color = Color3.fromRGB(20, 20, 30) },
+	-- Godly Egg
+	{ Id = "odin", Name = "Odin Din Din Dun", Rarity = "Epic", Multiplier = 350, Color = Color3.fromRGB(220, 220, 255) },
+	{ Id = "cocofanto", Name = "Cocofanto", Rarity = "Legendary", Multiplier = 650, Color = Color3.fromRGB(150, 150, 170) },
+	{ Id = "vacca", Name = "La Vacca Saturno", Rarity = "Mythic", Multiplier = 1_500, Color = Color3.fromRGB(255, 255, 255) },
+	{ Id = "garama", Name = "Garamararam", Rarity = "Secret", Multiplier = 5_000, Color = Color3.fromRGB(140, 60, 20) },
+	-- Robux-only Secret Egg
+	{ Id = "golden_tung", Name = "Golden Tung Tung", Rarity = "Mythic", Multiplier = 900, Color = Color3.fromRGB(255, 215, 0) },
+	{ Id = "rainbow_tralala", Name = "Rainbow Tralalero", Rarity = "Secret", Multiplier = 3_000, Color = Color3.fromRGB(255, 80, 255) },
+	{ Id = "void_sigma", Name = "Void Sigma", Rarity = "Secret", Multiplier = 12_000, Color = Color3.fromRGB(10, 0, 30) },
+}
+
+-- Chance values are relative weights. Lucky rarities get boosted by luck.
+Config.Eggs = {
+	{ Id = "basic", Name = "Brainrot Egg", Cost = 50, Color = Color3.fromRGB(255, 240, 200), Chances = { noobini = 60, pizzanini = 28, lirili = 10, tim = 2 } },
+	{ Id = "sahur", Name = "Sahur Egg", Cost = 2_500, Color = Color3.fromRGB(190, 130, 70), Chances = { tung = 60, tralala = 28, patapim = 10.5, ballerina = 1.5 } },
+	{ Id = "croc", Name = "Crocodilo Egg", Cost = 60_000, Color = Color3.fromRGB(60, 140, 70), Chances = { bombardiro = 60, chimpanzini = 28, frigo = 10.8, cappuccino = 1.2 } },
+	{ Id = "sigma", Name = "Sigma Egg", Cost = 1_500_000, Color = Color3.fromRGB(40, 40, 60), Chances = { skibidi = 60, rizzler = 30, gyatt = 9.7, sigma = 0.3 } },
+	{ Id = "godly", Name = "Godly Egg", Cost = 40_000_000, Color = Color3.fromRGB(0, 255, 200), Chances = { odin = 70, cocofanto = 27, vacca = 2.95, garama = 0.05 } },
+}
+Config.SecretEgg = { golden_tung = 85, rainbow_tralala = 14, void_sigma = 1 }
+
+Config.LuckyRarities = { Rare = true, Epic = true, Legendary = true, Mythic = true, Secret = true }
+
+Config.PetById = {}
+for _, pet in Config.Pets do
+	Config.PetById[pet.Id] = pet
+end
+Config.EggById = {}
+for _, egg in Config.Eggs do
+	Config.EggById[egg.Id] = egg
+end
+
+function Config.RebirthCost(rebirths: number): number
+	return Config.RebirthBaseCost * Config.RebirthCostGrowth ^ rebirths
+end
+
+function Config.RarityRank(rarity: string): number
+	return table.find(Config.RarityOrder, rarity) or 1
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="6">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="7">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="10">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="Script" referent="11">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Hatch a Brainrot server: clicking, eggs, pets, rebirths, gifts, purchases.
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local ClickRemote = remote("RemoteEvent", "Click")
+local HatchRemote = remote("RemoteFunction", "Hatch")
+local InventoryRemote = remote("RemoteEvent", "Inventory")
+local EquipRemote = remote("RemoteFunction", "Equip")
+local DeleteRemote = remote("RemoteFunction", "Delete")
+local RebirthRemote = remote("RemoteFunction", "Rebirth")
+local GiftRemote = remote("RemoteFunction", "ClaimGift")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+---------------------------------------------------------------- world
+
+local function buildWorld()
+	Lighting.ClockTime = 15
+	Lighting.Brightness = 2.5
+	local world = Instance.new("Folder")
+	world.Name = "World"
+	world.Parent = workspace
+	local function part(props)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.TopSurface = Enum.SurfaceType.Smooth
+		for k, v in props do
+			(p :: any)[k] = v
+		end
+		p.Parent = world
+		return p
+	end
+	part({ Name = "Island", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4, 260, 260), CFrame = CFrame.new(0, -2, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 210, 110), Material = Enum.Material.Grass })
+	part({ Name = "Water", Size = Vector3.new(2000, 1, 2000), Position = Vector3.new(0, -5, 0), Color = Color3.fromRGB(60, 150, 255), Material = Enum.Material.Glass, Transparency = 0.2, CanCollide = false })
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(14, 1, 14)
+	spawn.Position = Vector3.new(0, 0.5, 40)
+	spawn.Color = Color3.fromRGB(255, 220, 90)
+	spawn.Material = Enum.Material.Neon
+	spawn.Neutral = true
+	spawn.Parent = world
+
+	local eggFolder = Instance.new("Folder")
+	eggFolder.Name = "Eggs"
+	eggFolder.Parent = workspace
+	for i, egg in Config.Eggs do
+		local angle = math.rad(-60 + (i - 1) * 30)
+		local pos = Vector3.new(math.sin(angle) * 70, 0, -math.cos(angle) * 70)
+		local base = CFrame.lookAt(pos, Vector3.new(0, 0, 0))
+		local stand = Instance.new("Model")
+		stand.Name = egg.Id
+		stand:SetAttribute("EggId", egg.Id)
+		stand.Parent = eggFolder
+		local pedestal = part({ Name = "Pedestal", Size = Vector3.new(12, 3, 12), CFrame = base * CFrame.new(0, 1.5, 0), Color = Color3.fromRGB(70, 70, 90), Material = Enum.Material.Slate })
+		pedestal.Parent = stand
+		local eggPart = part({ Name = "Egg", Shape = Enum.PartType.Ball, Size = Vector3.new(7, 9, 7), CFrame = base * CFrame.new(0, 7.5, 0), Color = egg.Color, Material = Enum.Material.SmoothPlastic })
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = eggPart
+		eggPart.Parent = stand
+		stand.PrimaryPart = pedestal
+
+		local gui = Instance.new("BillboardGui")
+		gui.Size = UDim2.fromOffset(240, 90)
+		gui.StudsOffset = Vector3.new(0, 8, 0)
+		gui.MaxDistance = 80
+		gui.Parent = eggPart
+		local function line(text, color, y, h)
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Font = Enum.Font.FredokaOne
+			l.TextScaled = true
+			l.TextColor3 = color
+			l.Size = UDim2.new(1, 0, 0, h)
+			l.Position = UDim2.fromOffset(0, y)
+			l.Text = text
+			local s = Instance.new("UIStroke")
+			s.Thickness = 3
+			s.Parent = l
+			l.Parent = gui
+		end
+		line(egg.Name, Color3.new(1, 1, 1), 0, 44)
+		line(Format.Abbreviate(egg.Cost) .. " Brainpower", Color3.fromRGB(255, 120, 255), 46, 40)
+
+		for _, spec in { { "Hatch1", "Hatch x1", Enum.KeyCode.E, 1 }, { "Hatch3", "Hatch x3", Enum.KeyCode.R, 3 } } do
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = spec[1]
+			prompt.ActionText = spec[2]
+			prompt.ObjectText = egg.Name
+			prompt.KeyboardKeyCode = spec[3]
+			prompt.MaxActivationDistance = 14
+			prompt.RequiresLineOfSight = false
+			prompt:SetAttribute("Count", spec[4])
+			prompt.Parent = pedestal
+		end
+	end
+end
+buildWorld()
+
+---------------------------------------------------------------- stats
+
+local clickBudget: { [Player]: number } = {}
+
+local function luck(player: Player): number
+	local l = 1
+	if MonetizationService.OwnsPass(player, "Lucky") then
+		l *= 1.5
+	end
+	local data = DataService.Get(player)
+	if data and data.BoostUntil > os.time() then
+		l *= data.BoostLuck
+	end
+	return l
+end
+
+local function equipLimit(player: Player): number
+	return Config.BaseEquips + (if MonetizationService.OwnsPass(player, "MoreEquips") then Config.ExtraEquips else 0)
+end
+
+local function storageLimit(player: Player): number
+	return Config.BaseStorage + (if MonetizationService.OwnsPass(player, "MoreStorage") then Config.ExtraStorage else 0)
+end
+
+local function petCount(data): number
+	local n = 0
+	for _ in data.Pets do
+		n += 1
+	end
+	return n
+end
+
+local function clickPower(player: Player): number
+	local data = DataService.Get(player)
+	if not data then
+		return 0
+	end
+	local petBonus = 0
+	for _, pet in data.Pets do
+		if pet.Equipped then
+			local info = Config.PetById[pet.Id]
+			petBonus += info and info.Multiplier or 0
+		end
+	end
+	local power = (1 + petBonus) * (1 + data.Rebirths * Config.RebirthBonus)
+	if MonetizationService.OwnsPass(player, "DoubleClicks") then
+		power *= 2
+	end
+	return power
+end
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local power = clickPower(player)
+	player:SetAttribute("Brainpower", data.Brainpower)
+	player:SetAttribute("ClickPower", power)
+	player:SetAttribute("Rebirths", data.Rebirths)
+	player:SetAttribute("Luck", luck(player))
+	player:SetAttribute("BoostUntil", data.BoostUntil)
+	player:SetAttribute("NextGift", data.NextGift)
+	player:SetAttribute("EquipLimit", equipLimit(player))
+	player:SetAttribute("StorageLimit", storageLimit(player))
+	local equipped = {}
+	for _, pet in data.Pets do
+		if pet.Equipped then
+			table.insert(equipped, pet.Id)
+		end
+	end
+	player:SetAttribute("Equipped", table.concat(equipped, ","))
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Brainpower.Value = Format.Abbreviate(data.Brainpower)
+		stats.Rebirths.Value = data.Rebirths
+	end
+end
+
+local function sendInventory(player: Player)
+	local data = DataService.Get(player)
+	if data then
+		InventoryRemote:FireClient(player, data.Pets)
+	end
+	sync(player)
+end
+
+local function addPower(player: Player, amount: number)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	data.Brainpower += amount
+	if amount > 0 then
+		data.TotalPower += amount
+	end
+	player:SetAttribute("Brainpower", data.Brainpower)
+end
+
+---------------------------------------------------------------- pets
+
+local function roll(chances: { [string]: number }, luckMult: number): string
+	local total = 0
+	for id, weight in chances do
+		local info = Config.PetById[id]
+		total += weight * (if Config.LuckyRarities[info.Rarity] then luckMult else 1)
+	end
+	local r = math.random() * total
+	local last
+	for id, weight in chances do
+		local info = Config.PetById[id]
+		r -= weight * (if Config.LuckyRarities[info.Rarity] then luckMult else 1)
+		last = id
+		if r <= 0 then
+			return id
+		end
+	end
+	return last
+end
+
+local function equipBest(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local list = {}
+	for uid, pet in data.Pets do
+		pet.Equipped = false
+		table.insert(list, { uid = uid, mult = Config.PetById[pet.Id].Multiplier })
+	end
+	table.sort(list, function(a, b)
+		return a.mult > b.mult
+	end)
+	for i = 1, math.min(equipLimit(player), #list) do
+		data.Pets[list[i].uid].Equipped = true
+	end
+end
+
+local function givePet(player: Player, petId: string): string?
+	local data = DataService.Get(player)
+	if not data then
+		return nil
+	end
+	local uid = HttpService:GenerateGUID(false)
+	data.Pets[uid] = { Id = petId, Equipped = false }
+	data.Index[petId] = true
+	local info = Config.PetById[petId]
+	if Config.RarityRank(info.Rarity) >= Config.RarityRank("Legendary") then
+		notify(nil, player.DisplayName .. " hatched a " .. info.Rarity .. " " .. info.Name .. "!", Config.Rarities[info.Rarity])
+	end
+	return uid
+end
+
+local function autoEquipIfBetter(player: Player)
+	local data = DataService.Get(player)
+	if data and data.AutoEquip then
+		equipBest(player)
+	end
+end
+
+HatchRemote.OnServerInvoke = function(player, eggId, count)
+	local data = DataService.Get(player)
+	local egg = Config.EggById[eggId]
+	if not data or not egg or (count ~= 1 and count ~= 3) then
+		return false, "Invalid egg"
+	end
+	if count == 3 and not MonetizationService.OwnsPass(player, "TripleHatch") then
+		return false, "NeedTriple"
+	end
+	-- Egg proximity check stops exploiters hatching from anywhere.
+	local stand = workspace.Eggs:FindFirstChild(eggId)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not stand or not root or (stand:GetPivot().Position - root.Position).Magnitude > 25 then
+		return false, "Get closer to the egg!"
+	end
+	local cost = egg.Cost * count
+	if data.Brainpower < cost then
+		return false, "Need " .. Format.Abbreviate(cost) .. " Brainpower!"
+	end
+	if petCount(data) + count > storageLimit(player) then
+		return false, "Pet storage full! Delete some pets."
+	end
+	addPower(player, -cost)
+	local results = {}
+	local l = luck(player)
+	for _ = 1, count do
+		local id = roll(egg.Chances, l)
+		givePet(player, id)
+		table.insert(results, id)
+	end
+	data.Hatches += count
+	autoEquipIfBetter(player)
+	sendInventory(player)
+	return true, results
+end
+
+EquipRemote.OnServerInvoke = function(player, uid, equip)
+	local data = DataService.Get(player)
+	if not data then
+		return false
+	end
+	if uid == "BEST" then
+		equipBest(player)
+		sendInventory(player)
+		return true
+	end
+	if uid == "AUTO" then
+		data.AutoEquip = equip == true
+		return true
+	end
+	local pet = type(uid) == "string" and data.Pets[uid]
+	if not pet then
+		return false
+	end
+	if equip then
+		local n = 0
+		for _, p in data.Pets do
+			if p.Equipped then
+				n += 1
+			end
+		end
+		if n >= equipLimit(player) then
+			notify(player, "Equip limit reached! Get +3 Equips.", Color3.fromRGB(255, 90, 90))
+			return false
+		end
+	end
+	pet.Equipped = equip == true
+	sendInventory(player)
+	return true
+end
+
+DeleteRemote.OnServerInvoke = function(player, uids)
+	local data = DataService.Get(player)
+	if not data or type(uids) ~= "table" then
+		return false
+	end
+	for _, uid in uids do
+		if type(uid) == "string" then
+			data.Pets[uid] = nil
+		end
+	end
+	sendInventory(player)
+	return true
+end
+
+---------------------------------------------------------------- clicking, rebirth, gifts
+
+ClickRemote.OnServerEvent:Connect(function(player)
+	local budget = clickBudget[player]
+	if not budget or budget <= 0 then
+		return
+	end
+	clickBudget[player] = budget - 1
+	addPower(player, clickPower(player))
+end)
+
+RebirthRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data then
+		return false, "Loading..."
+	end
+	local cost = Config.RebirthCost(data.Rebirths)
+	if data.Brainpower < cost then
+		return false, "Need " .. Format.Abbreviate(cost) .. " Brainpower!"
+	end
+	data.Brainpower = 0
+	data.Rebirths += 1
+	sync(player)
+	notify(nil, player.DisplayName .. " reached Rebirth " .. data.Rebirths .. "!", Color3.fromRGB(255, 215, 0))
+	return true, "Rebirth! Now " .. (1 + data.Rebirths * Config.RebirthBonus) .. "x Brainpower forever."
+end
+
+GiftRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data or os.time() < data.NextGift then
+		return false, "Not ready yet!"
+	end
+	data.NextGift = os.time() + Config.GiftEverySeconds
+	data.GiftStreak += 1
+	local reward
+	if data.GiftStreak % 6 == 0 then
+		data.BoostUntil = math.max(data.BoostUntil, os.time()) + 600
+		data.BoostLuck = math.max(data.BoostLuck, 2)
+		reward = "10 minutes of 2x Luck!"
+	else
+		local amount = math.max(100, math.floor(clickPower(player) * 8 * 120))
+		addPower(player, amount)
+		reward = Format.Abbreviate(amount) .. " Brainpower!"
+	end
+	sync(player)
+	return true, "Gift: " .. reward
+end
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for _, player in Players:GetPlayers() do
+			clickBudget[player] = Config.MaxClicksPerSecond
+			if MonetizationService.OwnsPass(player, "AutoClick") and DataService.Get(player) then
+				addPower(player, clickPower(player) * Config.AutoClicksPerSecond)
+			end
+			local data = DataService.Get(player)
+			if data then
+				data.PlaySeconds += 1
+				local stats = player:FindFirstChild("leaderstats")
+				if stats then
+					stats.Brainpower.Value = Format.Abbreviate(data.Brainpower)
+				end
+			end
+		end
+	end
+end)
+
+---------------------------------------------------------------- monetization
+
+local function powerPack(seconds: number, min: number)
+	return function(player)
+		-- Assume a brisk 8 clicks/sec of the player's current power.
+		local amount = math.max(min, math.floor(clickPower(player) * 8 * seconds))
+		addPower(player, amount)
+		sync(player)
+		notify(player, "+" .. Format.Abbreviate(amount) .. " Brainpower! Thanks!", Color3.fromRGB(90, 255, 90))
+		return true
+	end
+end
+
+local function luckBoost(mult: number, seconds: number)
+	return function(player, data)
+		if data.BoostUntil > os.time() and data.BoostLuck > mult then
+			-- Stronger boost already running: extend it instead.
+			data.BoostUntil += seconds
+		else
+			data.BoostUntil = math.max(data.BoostUntil, os.time()) + seconds
+			data.BoostLuck = mult
+		end
+		sync(player)
+		notify(player, mult .. "x Luck active!", Color3.fromRGB(0, 255, 200))
+		return true
+	end
+end
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		PowerSmall = powerPack(15 * 60, 1_000),
+		PowerLarge = powerPack(3 * 3600, 100_000),
+		LuckBoost = luckBoost(2, 30 * 60),
+		SuperLuckBoost = luckBoost(5, 15 * 60),
+		SecretEgg = function(player, data)
+			local id = roll(Config.SecretEgg, luck(player))
+			-- Robux pets ignore storage limits so a purchase never fails.
+			givePet(player, id)
+			if data.AutoEquip then
+				equipBest(player)
+			end
+			sendInventory(player)
+			notify(player, "You got " .. Config.PetById[id].Name .. "!", Config.Rarities[Config.PetById[id].Rarity])
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		sync(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local power = Instance.new("StringValue")
+	power.Name = "Brainpower"
+	power.Parent = stats
+	local rebirths = Instance.new("IntValue")
+	rebirths.Name = "Rebirths"
+	rebirths.Parent = stats
+	stats.Parent = player
+	if data.NextGift == 0 then
+		data.NextGift = os.time() + Config.GiftEverySeconds
+	end
+	-- Remove pets whose definitions were deleted from Config.
+	for uid, pet in data.Pets do
+		if not Config.PetById[pet.Id] then
+			data.Pets[uid] = nil
+		end
+	end
+	sendInventory(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	clickBudget[player] = nil
+end)
+
+DataService.Init("HatchABrainrot_v1", {
+	Brainpower = 0,
+	TotalPower = 0,
+	Rebirths = 0,
+	Pets = {},
+	Index = {},
+	Hatches = 0,
+	AutoEquip = true,
+	BoostUntil = 0,
+	BoostLuck = 1,
+	NextGift = 0,
+	GiftStreak = 0,
+	PlaySeconds = 0,
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="12">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="13">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="14">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="15">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Hatch a Brainrot client: click button, hatching, pet inventory, shop, followers.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+
+local function buy(kind: string, key: string)
+	local id = if kind == "Pass" then Config.Passes[key] else Config.Products[key]
+	if id > 0 then
+		if kind == "Pass" then
+			MarketplaceService:PromptGamePassPurchase(player, id)
+		else
+			MarketplaceService:PromptProductPurchase(player, id)
+		end
+	elseif RunService:IsStudio() then
+		testPurchase:FireServer(kind, key)
+		toast("[Studio test] granted " .. key, Color3.fromRGB(255, 215, 0))
+	else
+		toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+	end
+end
+
+---------------------------------------------------------------- top HUD
+
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(340, 80),
+	BackgroundColor3 = Color3.fromRGB(40, 20, 60),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local powerLabel = UI.Label("0", { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 2), TextColor3 = Color3.fromRGB(255, 120, 255), Parent = top })
+local perClick = UI.Label("+1 per click", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.fromOffset(5, 48), TextColor3 = Color3.fromRGB(230, 230, 230), Parent = top })
+local banner = UI.Label("", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 92), Size = UDim2.fromOffset(500, 30), TextColor3 = Color3.fromRGB(0, 255, 200), Parent = gui })
+
+local function refresh()
+	powerLabel.Text = "🧠 " .. Format.Abbreviate(player:GetAttribute("Brainpower") or 0)
+	perClick.Text = "+" .. Format.Abbreviate(player:GetAttribute("ClickPower") or 1) .. " per click  •  Rebirths " .. (player:GetAttribute("Rebirths") or 0)
+end
+player.AttributeChanged:Connect(refresh)
+refresh()
+
+---------------------------------------------------------------- clicking
+
+local clickRemote = remotes:WaitForChild("Click")
+local clickButton = UI.Button("CLICK!", Color3.fromRGB(255, 80, 200), {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -20),
+	Size = UDim2.fromOffset(200, 80),
+	Parent = gui,
+})
+local lastClick = 0
+local function doClick()
+	local now = os.clock()
+	if now - lastClick < 1 / Config.MaxClicksPerSecond then
+		return
+	end
+	lastClick = now
+	clickRemote:FireServer()
+	local pop = UI.Label("+" .. Format.Abbreviate(player:GetAttribute("ClickPower") or 1), {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, math.random(-120, 120), 1, -130),
+		Size = UDim2.fromOffset(160, 40),
+		TextColor3 = Color3.fromRGB(255, 160, 255),
+		Parent = gui,
+	})
+	TweenService:Create(pop, TweenInfo.new(0.8), { Position = pop.Position - UDim2.fromOffset(0, 120), TextTransparency = 1 }):Play()
+	task.delay(0.8, pop.Destroy, pop)
+	clickButton.Size = UDim2.fromOffset(190, 74)
+	TweenService:Create(clickButton, TweenInfo.new(0.1), { Size = UDim2.fromOffset(200, 80) }):Play()
+end
+clickButton.Activated:Connect(doClick)
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		doClick()
+	end
+end)
+
+---------------------------------------------------------------- modals
+
+local function modal(title: string): (Frame, ScrollingFrame)
+	local frame = UI.new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, 560, 0.72, 0),
+		BackgroundColor3 = Color3.fromRGB(45, 30, 70),
+		Visible = false,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 580)
+	c.Parent = frame
+	UI.Label(title, { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	local close = UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame })
+	close.Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		ScrollBarThickness = 8,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		Parent = frame,
+	}) :: ScrollingFrame
+	return frame, list
+end
+
+local modals = {}
+local function toggle(frame: Frame)
+	for _, m in modals do
+		if m ~= frame then
+			m.Visible = false
+		end
+	end
+	frame.Visible = not frame.Visible
+end
+
+-- Shop
+local shop, shopList = modal("SHOP")
+table.insert(modals, shop)
+do
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = shopList
+	local order = 0
+	local function item(info, kind)
+		order += 1
+		local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = Color3.fromRGB(70, 50, 100), LayoutOrder = order, Parent = shopList }, { UI.Corner(12) })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(210, 200, 230), Parent = row })
+		local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(120, 52),
+			Parent = row,
+		})
+		if kind == "Pass" then
+			local function owned()
+				if player:GetAttribute("Pass_" .. info.Key) then
+					b.Text = "OWNED"
+					b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+				end
+			end
+			player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+			owned()
+		end
+		b.Activated:Connect(function()
+			if kind == "Pass" and player:GetAttribute("Pass_" .. info.Key) then
+				return
+			end
+			buy(kind, info.Key)
+		end)
+	end
+	for _, info in Config.PassInfo do
+		item(info, "Pass")
+	end
+	for _, info in Config.ProductInfo do
+		item(info, "Product")
+	end
+end
+
+-- Rebirth
+local rebirthFrame, rebirthList = modal("REBIRTH")
+table.insert(modals, rebirthFrame)
+local rebirthText = UI.Label("", { Size = UDim2.new(1, 0, 0, 120), TextWrapped = true, Parent = rebirthList })
+local rebirthButton = UI.Button("REBIRTH!", Color3.fromRGB(255, 170, 0), { Position = UDim2.fromOffset(0, 130), Size = UDim2.new(1, -10, 0, 64), Parent = rebirthList })
+local function refreshRebirth()
+	local r = player:GetAttribute("Rebirths") or 0
+	rebirthText.Text = "Cost: " .. Format.Abbreviate(Config.RebirthCost(r)) .. " Brainpower\nReward: " .. (1 + (r + 1) * Config.RebirthBonus) .. "x Brainpower forever\nKeeps your pets!"
+end
+player:GetAttributeChangedSignal("Rebirths"):Connect(refreshRebirth)
+refreshRebirth()
+rebirthButton.Activated:Connect(function()
+	local ok, msg = remotes.Rebirth:InvokeServer()
+	toast(msg, if ok then Color3.fromRGB(255, 215, 0) else Color3.fromRGB(255, 90, 90))
+end)
+
+-- Pets inventory
+local petsFrame, petGrid = modal("PETS")
+table.insert(modals, petsFrame)
+petGrid.Position = UDim2.fromOffset(12, 124)
+petGrid.Size = UDim2.new(1, -24, 1, -136)
+local grid = Instance.new("UIGridLayout")
+grid.CellSize = UDim2.fromOffset(120, 120)
+grid.CellPadding = UDim2.fromOffset(8, 8)
+grid.SortOrder = Enum.SortOrder.LayoutOrder
+grid.Parent = petGrid
+local countLabel = UI.Label("0/60", { Position = UDim2.new(1, -200, 0, 10), Size = UDim2.fromOffset(130, 40), Parent = petsFrame })
+local bar = UI.new("Frame", { Position = UDim2.fromOffset(12, 64), Size = UDim2.new(1, -24, 0, 52), BackgroundTransparency = 1, Parent = petsFrame })
+local barLayout = Instance.new("UIListLayout")
+barLayout.FillDirection = Enum.FillDirection.Horizontal
+barLayout.Padding = UDim.new(0, 8)
+barLayout.Parent = bar
+local equipBestButton = UI.Button("Equip Best", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(160, 50), Parent = bar })
+local autoButton = UI.Button("Auto: ON", Color3.fromRGB(40, 140, 230), { Size = UDim2.fromOffset(160, 50), Parent = bar })
+local deleteButton = UI.Button("Delete: OFF", Color3.fromRGB(150, 60, 60), { Size = UDim2.fromOffset(170, 50), Parent = bar })
+
+local inventory = {}
+local deleteMode = false
+local autoEquip = true
+
+local function renderInventory()
+	for _, child in petGrid:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	local list = {}
+	for uid, pet in inventory do
+		local info = Config.PetById[pet.Id]
+		if info then
+			table.insert(list, { uid = uid, pet = pet, info = info })
+		end
+	end
+	table.sort(list, function(a, b)
+		if a.pet.Equipped ~= b.pet.Equipped then
+			return a.pet.Equipped
+		end
+		return a.info.Multiplier > b.info.Multiplier
+	end)
+	countLabel.Text = #list .. "/" .. (player:GetAttribute("StorageLimit") or Config.BaseStorage)
+	for i, entry in list do
+		local color = Config.Rarities[entry.info.Rarity]
+		local card = UI.new("TextButton", {
+			Text = "",
+			LayoutOrder = i,
+			BackgroundColor3 = color:Lerp(Color3.new(0, 0, 0), 0.55),
+			AutoButtonColor = true,
+			Parent = petGrid,
+		}, { UI.Corner(12), UI.Stroke(if entry.pet.Equipped then Color3.fromRGB(90, 255, 90) else color, if entry.pet.Equipped then 4 else 2) }) :: TextButton
+		UI.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 8),
+			Size = UDim2.fromOffset(44, 44),
+			BackgroundColor3 = entry.info.Color,
+			Parent = card,
+		}, { UI.Corner(22), UI.Stroke(Color3.new(0, 0, 0), 2) })
+		UI.Label(entry.info.Name, { Position = UDim2.fromOffset(4, 56), Size = UDim2.new(1, -8, 0, 22), Parent = card })
+		UI.Label("x" .. Format.Abbreviate(entry.info.Multiplier), { Position = UDim2.fromOffset(4, 78), Size = UDim2.new(1, -8, 0, 20), TextColor3 = Color3.fromRGB(255, 160, 255), Parent = card })
+		UI.Label(entry.info.Rarity, { Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextColor3 = color, Parent = card })
+		card.Activated:Connect(function()
+			if deleteMode then
+				remotes.Delete:InvokeServer({ entry.uid })
+			else
+				remotes.Equip:InvokeServer(entry.uid, not entry.pet.Equipped)
+			end
+		end)
+	end
+end
+
+remotes:WaitForChild("Inventory").OnClientEvent:Connect(function(pets)
+	inventory = pets
+	renderInventory()
+end)
+equipBestButton.Activated:Connect(function()
+	remotes.Equip:InvokeServer("BEST")
+end)
+autoButton.Activated:Connect(function()
+	autoEquip = not autoEquip
+	autoButton.Text = if autoEquip then "Auto: ON" else "Auto: OFF"
+	remotes.Equip:InvokeServer("AUTO", autoEquip)
+end)
+deleteButton.Activated:Connect(function()
+	deleteMode = not deleteMode
+	deleteButton.Text = if deleteMode then "Delete: ON" else "Delete: OFF"
+	deleteButton.BackgroundColor3 = if deleteMode then Color3.fromRGB(230, 40, 40) else Color3.fromRGB(150, 60, 60)
+end)
+
+---------------------------------------------------------------- side buttons + gift
+
+local side = UI.new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(130, 300), BackgroundTransparency = 1, Parent = gui })
+local sideLayout = Instance.new("UIListLayout")
+sideLayout.Padding = UDim.new(0, 10)
+sideLayout.Parent = side
+UI.Button("PETS", Color3.fromRGB(255, 120, 40), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	toggle(petsFrame)
+end)
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	toggle(shop)
+end)
+UI.Button("REBIRTH", Color3.fromRGB(255, 170, 0), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	toggle(rebirthFrame)
+end)
+local giftButton = UI.Button("GIFT", Color3.fromRGB(200, 60, 255), { Size = UDim2.fromOffset(130, 56), Parent = side })
+giftButton.Activated:Connect(function()
+	local ok, msg = remotes.ClaimGift:InvokeServer()
+	toast(msg, if ok then Color3.fromRGB(255, 215, 0) else Color3.fromRGB(255, 90, 90))
+end)
+
+task.spawn(function()
+	while true do
+		local now = os.time()
+		local nextGift = player:GetAttribute("NextGift") or 0
+		giftButton.Text = if nextGift <= now then "GIFT READY!" else "Gift " .. Format.Time(nextGift - now)
+		local boost = player:GetAttribute("BoostUntil") or 0
+		local l = player:GetAttribute("Luck") or 1
+		banner.Text = if boost > now then string.format("%gx LUCK  %s", l, Format.Time(boost - now)) else ""
+		task.wait(0.5)
+	end
+end)
+
+---------------------------------------------------------------- hatching
+
+local hatchFrame = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.45),
+	Size = UDim2.fromOffset(600, 260),
+	BackgroundTransparency = 1,
+	Visible = false,
+	Parent = gui,
+})
+local hatchLayout = Instance.new("UIListLayout")
+hatchLayout.FillDirection = Enum.FillDirection.Horizontal
+hatchLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+hatchLayout.Padding = UDim.new(0, 16)
+hatchLayout.Parent = hatchFrame
+
+local hatching = false
+local function playHatch(eggId: string, results: { string })
+	hatching = true
+	for _, c in hatchFrame:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	hatchFrame.Visible = true
+	local egg = Config.EggById[eggId]
+	local eggs = {}
+	for _ = 1, #results do
+		local e = UI.new("Frame", { Size = UDim2.fromOffset(170, 220), BackgroundColor3 = egg.Color }, { UI.Corner(85), UI.Stroke(Color3.new(0, 0, 0), 4) })
+		e.Parent = hatchFrame
+		table.insert(eggs, e)
+	end
+	for i = 1, 8 do
+		for _, e in eggs do
+			e.Rotation = if i % 2 == 0 then 12 else -12
+		end
+		task.wait(0.09 + i * 0.01)
+	end
+	for i, e in eggs do
+		local info = Config.PetById[results[i]]
+		local color = Config.Rarities[info.Rarity]
+		e.Rotation = 0
+		e.BackgroundColor3 = info.Color
+		UI.Label(info.Rarity, { Position = UDim2.fromOffset(5, 40), Size = UDim2.new(1, -10, 0, 34), TextColor3 = color, Parent = e })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(5, 80), Size = UDim2.new(1, -10, 0, 50), TextWrapped = true, Parent = e })
+		UI.Label("x" .. Format.Abbreviate(info.Multiplier), { Position = UDim2.fromOffset(5, 140), Size = UDim2.new(1, -10, 0, 34), TextColor3 = Color3.fromRGB(255, 160, 255), Parent = e })
+	end
+	task.wait(1.6)
+	hatchFrame.Visible = false
+	hatching = false
+end
+
+ProximityPromptService.PromptTriggered:Connect(function(prompt)
+	local count = prompt:GetAttribute("Count")
+	local stand = prompt:FindFirstAncestorOfClass("Model")
+	local eggId = stand and stand:GetAttribute("EggId")
+	if not count or not eggId or hatching then
+		return
+	end
+	local ok, result = remotes.Hatch:InvokeServer(eggId, count)
+	if ok then
+		playHatch(eggId, result)
+	elseif result == "NeedTriple" then
+		buy("Pass", "TripleHatch")
+	else
+		toast(result, Color3.fromRGB(255, 90, 90))
+	end
+end)
+
+---------------------------------------------------------------- pet followers (all players, client-side)
+
+local followers: { [Player]: { key: string, parts: { BasePart } } } = {}
+local followFolder = Instance.new("Folder")
+followFolder.Name = "PetFollowers"
+followFolder.Parent = workspace
+
+local function makePet(info): BasePart
+	local rank = Config.RarityRank(info.Rarity)
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Ball
+	p.Size = Vector3.one * (1.6 + rank * 0.2)
+	p.Color = info.Color
+	p.Material = if rank >= 6 then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	for _, side in { -1, 1 } do
+		local eye = Instance.new("Part")
+		eye.Shape = Enum.PartType.Ball
+		eye.Size = Vector3.one * 0.5
+		eye.Color = Color3.new(0, 0, 0)
+		eye.Anchored = false
+		eye.CanCollide = false
+		eye.CanQuery = false
+		eye.Massless = true
+		eye.CFrame = p.CFrame * CFrame.new(side * p.Size.X * 0.2, p.Size.Y * 0.15, -p.Size.Z * 0.45)
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = p
+		w.Part1 = eye
+		w.Parent = eye
+		eye.Parent = p
+	end
+	if rank >= 5 then
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Color = ColorSequence.new(Config.Rarities[info.Rarity])
+		sparkle.LightEmission = 1
+		sparkle.Size = NumberSequence.new(0.25, 0)
+		sparkle.Rate = 8
+		sparkle.Lifetime = NumberRange.new(0.6)
+		sparkle.Speed = NumberRange.new(1)
+		sparkle.Parent = p
+	end
+	p.Parent = followFolder
+	return p
+end
+
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	for _, plr in Players:GetPlayers() do
+		local key = plr:GetAttribute("Equipped") or ""
+		local entry = followers[plr]
+		if not entry or entry.key ~= key then
+			if entry then
+				for _, p in entry.parts do
+					p:Destroy()
+				end
+			end
+			entry = { key = key, parts = {} }
+			for id in string.gmatch(key, "[^,]+") do
+				local info = Config.PetById[id]
+				if info then
+					table.insert(entry.parts, makePet(info))
+				end
+			end
+			followers[plr] = entry
+		end
+		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root then
+			local n = #entry.parts
+			for i, p in entry.parts do
+				local angle = math.pi + (i - (n + 1) / 2) * 0.55
+				local offset = Vector3.new(math.sin(angle) * 6, 0, -math.cos(angle) * 6)
+				local target = root.CFrame * CFrame.new(offset) + Vector3.new(0, math.sin(t * 4 + i) * 0.4 - 1, 0)
+				p.CFrame = p.CFrame:Lerp(CFrame.lookAt(target.Position, target.Position + root.CFrame.LookVector), 0.2)
+			end
+		end
+	end
+	for plr, entry in followers do
+		if not plr.Parent then
+			for _, p in entry.parts do
+				p:Destroy()
+			end
+			followers[plr] = nil
+		end
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
