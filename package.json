@@ -1,0 +1,38 @@
+{
+  "name": "grindfit",
+  "version": "1.0.0",
+  "description": "AI calorie tracker + body fat scanner turned into a ranked grinding game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --watch --env-file-if-exists=.env server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sxvage123/Sxvage123.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Sxvage123/Sxvage123/issues"
+  },
+  "homepage": "https://github.com/Sxvage123/Sxvage123#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/camera": "^8.2.6",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
+    "@mediapipe/tasks-vision": "^1.1.1"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "esbuild": "^0.28.2"
+  }
+}
