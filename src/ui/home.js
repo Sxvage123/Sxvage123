@@ -6,6 +6,7 @@ import { dayTotals, dailyQuests, challengeProgress, streakMultiplier } from '../
 import { standings, LEAGUES, weekProgress } from '../lib/league.js';
 import { openAddFood } from './food.js';
 import { openLeague } from './progress.js';
+import { suggestFoods } from '../lib/suggest.js';
 
 export function renderHome(root, app) {
   const { state, stats, today } = app;
@@ -74,6 +75,8 @@ export function renderHome(root, app) {
     <button class="qa" data-go="scan"><span>🧬</span>Body scan</button>
   </div>
 
+  ${macroCloser(app, t)}
+
   <section class="card">
     <div class="card-head"><h3>Daily quests</h3><span class="muted small">auto-tracked</span></div>
     ${quests
@@ -114,8 +117,27 @@ export function renderHome(root, app) {
   root.querySelectorAll('[data-go]').forEach((el) => (el.onclick = () => app.go(el.dataset.go)));
   root.querySelectorAll('[data-add]').forEach((el) => (el.onclick = () => openAddFood(app, el.dataset.add)));
   root.querySelector('[data-league]').onclick = () => openLeague(app);
+  root.querySelectorAll('[data-suggest]').forEach((el) => (el.onclick = () => openAddFood(app, 'search', { foodName: el.dataset.suggest })));
   root.querySelector('[data-streak]').onclick = () => streakSheet(app);
   bindChallenge(root, app);
+}
+
+// Afternoon/evening helper: foods that would close today's calorie and protein gap.
+function macroCloser(app, t) {
+  const p = app.state.profile;
+  const kcalLeft = p.calorieGoal - t.calories;
+  const proteinLeft = p.proteinGoal - t.protein;
+  const hour = new Date().getHours();
+  if (kcalLeft < 150 || (hour < 13 && t.calories < p.calorieGoal * 0.4)) return '';
+  const picks = suggestFoods(kcalLeft, proteinLeft);
+  if (!picks.length) return '';
+  return `
+  <section class="card closer">
+    <div class="card-head"><h3>🎯 Close your macros</h3><span class="muted small">${fmt(kcalLeft)} kcal${proteinLeft > 0 ? ` · ${fmt(proteinLeft)}g protein` : ''} left</span></div>
+    <div class="closer-list">
+      ${picks.map((f) => `<button class="closer-item" data-suggest="${esc(f.name)}"><b>${esc(f.name)}</b><span>${fmt(f.calories)} kcal · ${fmt(f.protein)}g P</span></button>`).join('')}
+    </div>
+  </section>`;
 }
 
 function macroRow(label, value, goal, color) {

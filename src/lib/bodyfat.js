@@ -199,8 +199,11 @@ export function estimateFromPhotos({ sex, heightCm, front, side, calibration = 1
   const waistCm = rawWaist * clamp(calibration || 1, 0.8, 1.25);
   const bodyFat = rfm(sex, heightCm, waistCm);
   const margin = (side ? 3.5 : 4.5) + (front.warnings.length ? 1 : 0);
+  // Shoulder-to-waist width ratio ("V-taper"). Only meaningful when arms are clear of the torso.
+  const vTaper = front.shoulderPx && !front.warnings.length ? round2(front.shoulderPx / front.waistPx) : null;
   return {
     method: side ? 'photo2' : 'photo',
+    vTaper,
     bodyFat: round1(bodyFat),
     low: round1(Math.max(3, bodyFat - margin)),
     high: round1(bodyFat + margin),
@@ -229,6 +232,14 @@ export function estimateFromTape({ sex, heightCm, waistCm, neckCm, hipCm }) {
     navy: n !== null ? round1(n) : null,
     confidence: 'high',
   };
+}
+
+// V-taper (shoulder:waist width) tiers. ~1.6 is the classic "golden ratio" physique target.
+export function vTaperLabel(r) {
+  if (r >= 1.6) return { label: 'Golden ratio', color: '#d4ff3a' };
+  if (r >= 1.45) return { label: 'Strong V', color: '#5ee6d0' };
+  if (r >= 1.3) return { label: 'Athletic', color: '#6fb6ff' };
+  return { label: 'Building', color: '#ffd34d' };
 }
 
 // Waist-to-height ratio guidance (keep your waist under half your height).

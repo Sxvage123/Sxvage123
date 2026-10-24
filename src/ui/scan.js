@@ -5,7 +5,7 @@ import { lineChart } from './charts.js';
 import { pickImage, toCanvas, thumbnail } from '../ml/media.js';
 import { analyzeBodyPhoto } from '../ml/bodyscan.js';
 import { liveCapture } from './livecam.js';
-import { estimateFromPhotos, estimateFromTape, categoryFor, CATEGORIES, whtrLabel, WARNING_TEXT, weightAtBodyFat, leanMassKg, ScanError, round1 } from '../lib/bodyfat.js';
+import { estimateFromPhotos, estimateFromTape, categoryFor, CATEGORIES, whtrLabel, vTaperLabel, WARNING_TEXT, weightAtBodyFat, leanMassKg, ScanError, round1 } from '../lib/bodyfat.js';
 import { shortDay } from '../lib/dates.js';
 import { kgToLb, lbToKg, cmToIn, inToCm } from '../lib/nutrition.js';
 import { uid } from '../store.js';
@@ -340,6 +340,7 @@ function showResult(app, scan, { overlay, prevBest, fresh }) {
         <div class="stat-grid">
           ${scan.waistCm ? `<div class="stat"><b>${showLen(app, scan.waistCm)}</b><span>Waist ${scan.method.startsWith('photo') ? '(est.)' : ''}</span></div>` : ''}
           ${wl ? `<div class="stat"><b style="color:${wl.color}">${scan.whtr.toFixed(2)}</b><span>Waist/height · ${esc(wl.label)}</span></div>` : ''}
+          ${scan.vTaper ? `<div class="stat"><b style="color:${vTaperLabel(scan.vTaper).color}">${scan.vTaper.toFixed(2)}</b><span>V-taper · ${esc(vTaperLabel(scan.vTaper).label)}</span></div>` : ''}
           <div class="stat"><b>${showWt(app, lean)}</b><span>Lean mass</span></div>
           <div class="stat"><b>${showWt(app, wt * (scan.bodyFat / 100))}</b><span>Fat mass</span></div>
         </div>

@@ -147,7 +147,13 @@ export function openAddFood(app, mode = 'snap', opts = {}) {
           close(true);
         };
         if (ctx.mode === 'snap') snapPane(body, app, ctx, done);
-        else if (ctx.mode === 'search') searchPane(body, app, ctx, done);
+        else if (ctx.mode === 'search' && opts.foodName && !ctx.openedFood) {
+          // Deep link from a suggestion: jump straight to the food's detail screen.
+          ctx.openedFood = true;
+          const food = FOODS.find((f) => f.name === opts.foodName);
+          if (food) foodDetail(body, app, food, { source: 'suggestion', onBack: () => searchPane(body, app, ctx, done), done });
+          else searchPane(body, app, ctx, done, opts.foodName);
+        } else if (ctx.mode === 'search') searchPane(body, app, ctx, done, opts.query || '');
         else if (ctx.mode === 'barcode') barcodePane(body, app, ctx, done);
         else quickPane(body, app, ctx, done);
       };

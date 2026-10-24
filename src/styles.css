@@ -530,3 +530,8 @@ details.cat summary::-webkit-details-marker { display: none; }
   .rank-emblem, .rank-hero .emblem { filter: none; }
   .league-mini { border-color: var(--line); }
 }
+
+.closer-list { display: grid; gap: 8px; }
+.closer-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; padding: 12px 14px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line); }
+.closer-item b { font-size: 14px; }
+.closer-item span { font-size: 12px; color: var(--muted); white-space: nowrap; }
