@@ -7,9 +7,20 @@ Snap your meals, scan your body and finish daily challenges to earn XP and rank 
 - **No API keys. No subscription. No account.** All the AI runs on your phone.
 - **Private.** Your photos and data never leave the device.
 
+<p>
+  <img src="docs/screenshots/home.jpg" width="200" alt="Home: rank, daily challenge, calorie ring">
+  <img src="docs/screenshots/snap.jpg" width="200" alt="Snap a meal: on-device food recognition">
+  <img src="docs/screenshots/scan.jpg" width="200" alt="Body-fat scan result with body outline">
+</p>
+<p>
+  <img src="docs/screenshots/league.jpg" width="200" alt="Weekly league standings">
+  <img src="docs/screenshots/recap.jpg" width="200" alt="Weekly recap">
+  <img src="docs/screenshots/sharecard.jpg" width="200" alt="Shareable rank card">
+</p>
+
 ## Download
 
-**[⬇ GrindFit.apk](releases/GrindFit.apk)**
+**[⬇ GrindFit.apk](../../raw/claude/ai-fitness-tracker-game-dkkb78/releases/GrindFit.apk)** (or open `releases/GrindFit.apk` in this repo and tap **Download raw file**)
 
 To install it:
 1. Open the link on your Android phone and tap **Download**.
