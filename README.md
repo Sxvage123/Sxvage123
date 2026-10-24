@@ -35,6 +35,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Eat the Brainrot World** | Eat the World (eat the city to grow, eat smaller players, Shrink Ray) | `build/EatTheBrainrotWorld.rbxlx` |
 | **Escape the Lava for Brainrots** | Tsunami-escape variant with a lava flow and volcanic zones | `build/EscapeLavaForBrainrots.rbxlx` |
 | **Brainrot Color Block** | Color Block / Block Party (stand on the called colour, last one standing) | `build/BrainrotColorBlock.rbxlx` |
+| **Brainrot Jump Rope** | Jump Rope games (rope speeds up, last jumper wins, Turbo Rope troll) | `build/BrainrotJumpRope.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
