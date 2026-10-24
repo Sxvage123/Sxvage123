@@ -1,7 +1,7 @@
 // First-run setup: collects body stats and goal, computes targets, then drops you into the grind.
 
 import { esc, haptic, sheet } from './dom.js';
-import { ACTIVITY_LEVELS, GOALS, computeTargets, lbToKg, inToCm, kgToLb, cmToFtIn } from '../lib/nutrition.js';
+import { ACTIVITY_LEVELS, GOALS, computeTargets, lbToKg, inToCm, kgToLb, cmToFtIn, isMinor } from '../lib/nutrition.js';
 import { targetsFor } from '../app.js';
 
 const STEPS = ['welcome', 'name', 'basics', 'body', 'activity', 'goal', 'summary'];
@@ -186,7 +186,7 @@ const BODY = {
     return `
     <h2 class="onb-title">Your daily targets</h2>
     <p class="muted">Based on a maintenance burn of <b>${t.tdee.toLocaleString()} kcal</b>/day. Change these any time in Me → Goals.</p>
-    ${p.age < 18 && draft.goal === 'cut' ? '<div class="banner">You’re still growing, so we don’t set a calorie deficit for under-18s. Train hard, hit your protein and let your body recomp.</div>' : ''}
+    ${isMinor(p) && draft.goal === 'cut' ? '<div class="banner">You’re still growing, so we don’t set a calorie deficit for under-18s. Train hard, hit your protein and let your body recomp.</div>' : ''}
     <div class="target-hero"><div class="target-num">${t.calories.toLocaleString()}</div><div class="muted">calories / day</div></div>
     <div class="macro-grid">
       <div class="macro-card p"><b>${t.protein}g</b><span>Protein</span></div>
@@ -218,10 +218,9 @@ export function showGuide({ afterOnboarding = false, app = null } = {}) {
       <div class="guide-step"><span>🔥</span><div><b>Keep the streak alive</b><small>Every streak day adds +5% XP (up to ×1.5). Every 7 days earns a freeze that protects a missed day.</small></div></div>
       <div class="guide-step"><span>🏆</span><div><b>Climb the league</b><small>Finish top 3 in your weekly league to get promoted. The bottom 3 drop down.</small></div></div>
       <button class="btn btn-primary btn-block btn-lg mt" data-ok>Let’s get it</button>`;
-    el.querySelector('[data-ok]').onclick = () => {
-      close();
-      // Streak reminders are a core loop; ask for notification permission at the moment it makes sense.
-      if (afterOnboarding && app) setTimeout(() => app.ensureNotificationPermission(), 400);
-    };
+    el.querySelector('[data-ok]').onclick = () => close();
+  }).then(() => {
+    // Streak reminders are a core loop; ask for notification permission once the guide closes (however it's dismissed).
+    if (afterOnboarding && app) setTimeout(() => app.ensureNotificationPermission(), 400);
   });
 }

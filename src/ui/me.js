@@ -6,11 +6,12 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { esc, fmt, sheet, toast, confirmDialog, setHaptics } from './dom.js';
 import { rankEmblem } from './charts.js';
-import { ACTIVITY_LEVELS, GOALS, kgToLb, lbToKg, cmToFtIn, inToCm, bmi } from '../lib/nutrition.js';
+import { ACTIVITY_LEVELS, GOALS, kgToLb, lbToKg, cmToFtIn, inToCm, bmi, isMinor } from '../lib/nutrition.js';
 import { targetsFor } from '../app.js';
 import { showGuide } from './onboarding.js';
 import { APP_VERSION } from '../version.js';
 import { exportJSON, importJSON, emptyState, flush, saveState } from '../store.js';
+import { inlineThumbs, migrateInlineThumbs, cleanupThumbs } from '../thumbs.js';
 
 export function renderMe(root, app) {
   const { state, stats } = app;
@@ -85,6 +86,7 @@ export function renderMe(root, app) {
     if (!(await confirmDialog({ title: 'Are you really sure?', message: 'There is no undo.', confirm: 'Yes, wipe it', danger: true }))) return;
     app.state = emptyState();
     saveState(app.state);
+    cleanupThumbs(app.state);
     await flush();
     app.tab = 'home';
     document.querySelector('#app').innerHTML = '';
@@ -183,6 +185,10 @@ const EDITORS = {
       el.querySelector('[data-save]').onclick = () => {
         const v = (s) => Math.round(Number(el.querySelector(s).value) || 0);
         const k = v('[data-k]');
+        if (isMinor(p) && k < targetsFor({ ...p, goal: 'maintain' }).calorieGoal) {
+          el.querySelector('[data-err]').textContent = 'Under 18, your calories can’t go below maintenance. Your body is still growing.';
+          return;
+        }
         if (k < 1000 || k > 6000) {
           el.querySelector('[data-err]').textContent = 'Calories should be between 1,000 and 6,000.';
           return;
@@ -195,7 +201,7 @@ const EDITORS = {
 };
 
 async function exportData(app) {
-  const json = exportJSON(app.state);
+  const json = exportJSON(await inlineThumbs(app.state));
   const name = `grindfit-backup-${app.today}.json`;
   try {
     if (Capacitor.isNativePlatform()) {
@@ -222,10 +228,12 @@ function importData(app) {
     try {
       const next = importJSON(await file.text());
       if (!(await confirmDialog({ title: 'Restore this backup?', message: `It has ${next.meals.length} meals and ${next.scans.length} scans. Your current data will be replaced.`, confirm: 'Restore' }))) return;
+      await migrateInlineThumbs(next); // photos come back as files, not inside the state blob
       app.update((s) => {
         for (const k of Object.keys(s)) delete s[k];
         Object.assign(s, next);
       });
+      cleanupThumbs(app.state);
       toast('Backup restored', { icon: '✅' });
     } catch (e) {
       toast(e.message || 'Could not read that file', { type: 'error' });

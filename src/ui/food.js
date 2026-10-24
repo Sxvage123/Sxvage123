@@ -337,8 +337,12 @@ function showPredictions(body, app, ctx, preds, thumb, done, retake) {
     const m = foodForLabel(pr.label);
     if (!m) continue;
     const prev = byFood.get(m.food.id);
-    if (prev) prev.score = Math.min(0.99, prev.score + pr.score);
-    else byFood.set(m.food.id, { ...pr, ...m, servings: 1 });
+    if (!prev) byFood.set(m.food.id, { ...pr, ...m, servings: 1 });
+    else if (!!prev.general !== !!pr.general) {
+      // Both models agree on the food: combine like independent evidence.
+      prev.score = 1 - (1 - prev.score) * (1 - pr.score);
+      prev.general = 'both';
+    } else prev.score = Math.max(prev.score, pr.score);
   }
   const items = [...byFood.values()].sort((a, b) => b.score - a.score).slice(0, 6);
   if (items[0] && items[0].score > 0.25) items[0].selected = true;
@@ -638,7 +642,7 @@ function editMeal(app, id) {
       if (!(await confirmDialog({ title: 'Delete this entry?', message: `${m.name} will be removed from your log.`, confirm: 'Delete', danger: true }))) return;
       app.update((s) => (s.meals = s.meals.filter((y) => y.id !== id)));
       // Only remove the photo file once no other entry from the same photo uses it.
-      if (m.thumb && !app.state.meals.some((y) => y.thumb === m.thumb)) deleteThumb(m.thumb.match(/thumbs\/([\w]+)\.jpg/)?.[1] || m.id, m.thumb);
+      if (m.thumb && !app.state.meals.some((y) => y.thumb === m.thumb)) deleteThumb(m.id, m.thumb);
       close();
     };
   });

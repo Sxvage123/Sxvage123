@@ -25,7 +25,7 @@ export async function storeThumb(id, dataUrl) {
 export async function deleteThumb(id, thumb) {
   if (!thumb || thumb.startsWith('data:') || !Capacitor.isNativePlatform()) return;
   try {
-    await Filesystem.deleteFile({ path: `${DIR}/${id}.jpg`, directory: Directory.Data });
+    await Filesystem.deleteFile({ path: `${DIR}/${fileIdOf(thumb) || id}.jpg`, directory: Directory.Data });
   } catch {
     /* already gone */
   }
@@ -47,4 +47,41 @@ export async function migrateInlineThumbs(state) {
     }
   }
   return changed;
+}
+
+const fileIdOf = (thumb) => thumb && thumb.match(/thumbs\/([\w-]+)\.jpg/)?.[1];
+
+// Backups must be portable: turn file thumbnails back into data URLs.
+export async function inlineThumbs(state) {
+  const copy = JSON.parse(JSON.stringify(state));
+  if (!Capacitor.isNativePlatform()) return copy;
+  for (const list of [copy.meals, copy.scans]) {
+    for (const item of list) {
+      const id = fileIdOf(item.thumb);
+      if (!id) continue;
+      try {
+        const { data } = await Filesystem.readFile({ path: `${DIR}/${id}.jpg`, directory: Directory.Data });
+        item.thumb = `data:image/jpeg;base64,${data}`;
+      } catch {
+        item.thumb = null;
+      }
+    }
+  }
+  return copy;
+}
+
+// Deletes thumbnail files nothing references anymore (after a reset or restore).
+export async function cleanupThumbs(state) {
+  if (!Capacitor.isNativePlatform()) return;
+  const used = new Set([...state.meals, ...state.scans].map((x) => fileIdOf(x.thumb)).filter(Boolean));
+  try {
+    const { files } = await Filesystem.readdir({ path: DIR, directory: Directory.Data });
+    for (const f of files) {
+      const name = typeof f === 'string' ? f : f.name;
+      const id = name.replace(/\.jpg$/, '');
+      if (!used.has(id)) await Filesystem.deleteFile({ path: `${DIR}/${name}`, directory: Directory.Data }).catch(() => {});
+    }
+  } catch {
+    /* no thumbs dir yet */
+  }
 }

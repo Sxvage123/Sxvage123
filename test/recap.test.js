@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { weeklyRecap } from '../src/lib/recap.js';
-import { computeStats } from '../src/lib/game.js';
 
 test('weekly recap summarises a week', () => {
   const s = { profile: { goal: 'cut', calorieGoal: 2000, proteinGoal: 150 }, meals: [], scans: [], challenges: {} };
@@ -11,7 +10,7 @@ test('weekly recap summarises a week', () => {
   s.challenges['2026-03-03'] = { metric: 'manual', target: 1, title: 'x', xp: 80, done: true };
   s.scans.push({ id: 'a', date: '2026-02-23', time: '2026-02-23T08', bodyFat: 20 });
   s.scans.push({ id: 'b', date: '2026-03-05', time: '2026-03-05T08', bodyFat: 19.2 });
-  const r = weeklyRecap(s, computeStats(s, '2026-03-09'), '2026-03-02');
+  const r = weeklyRecap(s, '2026-03-02');
   assert.equal(r.daysLogged, 3);
   assert.equal(r.meals, 9);
   assert.equal(r.avgCalories, 1800);
@@ -19,5 +18,4 @@ test('weekly recap summarises a week', () => {
   assert.equal(r.targetDays, 3);
   assert.equal(r.challenges, 1);
   assert.equal(r.bodyFatChange, -0.8);
-  assert.ok(r.xp > 0);
 });

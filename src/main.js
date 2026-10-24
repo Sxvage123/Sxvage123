@@ -4,7 +4,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { app } from './app.js';
 import { loadState, flush, saveState } from './store.js';
-import { migrateInlineThumbs } from './thumbs.js';
+import { migrateInlineThumbs, cleanupThumbs } from './thumbs.js';
 import { renderOnboarding } from './ui/onboarding.js';
 import { renderHome } from './ui/home.js';
 import { renderFood } from './ui/food.js';
@@ -28,7 +28,10 @@ async function boot() {
   });
   app.render();
   app.celebrate();
-  migrateInlineThumbs(app.state).then((changed) => changed && saveState(app.state)).catch(() => {});
+  migrateInlineThumbs(app.state)
+    .then((changed) => changed && saveState(app.state))
+    .then(() => cleanupThumbs(app.state))
+    .catch(() => {});
 
   if (Capacitor.isNativePlatform()) {
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});

@@ -11,9 +11,11 @@ export function suggestFoods(remainingKcal, remainingProtein, { limit = 3, pool 
     .filter((f) => !SKIP.has(f.category) && f.calories > 40 && f.calories <= remainingKcal * 1.05)
     .map((f) => {
       const density = f.protein / Math.max(1, f.calories); // grams of protein per kcal
-      const fill = f.calories / remainingKcal; // how much of the gap it closes
-      const proteinFit = needProtein ? Math.min(1, f.protein / remainingProtein) : 0;
-      const score = needProtein ? density * 100 + proteinFit * 2 + fill : fill * 3 + density * 5;
+      // Aim at one meal-sized chunk of the gap, not the whole day's remainder.
+      const fill = f.calories / Math.min(remainingKcal, 750);
+      const proteinFit = needProtein ? Math.min(1, f.protein / Math.min(remainingProtein, 55)) : 0;
+      // Close the gap: reward covering the protein and calories left, with protein density as a tiebreaker.
+      const score = needProtein ? proteinFit * 3 + Math.min(1, fill) * 2 + density * 15 : fill * 3 + density * 5;
       return { food: f, score };
     })
     .sort((a, b) => b.score - a.score)

@@ -414,8 +414,15 @@ const DISH_KEYWORDS = [
 
 const GENERIC_DISH = { calories: 450, protein: 20, carbs: 45, fat: 20, serving: '1 plate' };
 
+// Dish words that override everything else (a "stuffed pepper" is a meal, not a raw pepper).
+const OVERRIDES = [
+  [['stuffed', 'filled'], { calories: 360, protein: 18, carbs: 30, fat: 18, serving: '2 pieces' }],
+  [['casserole', 'bake', 'gratin'], { calories: 420, protein: 20, carbs: 32, fat: 23, serving: '1 cup' }],
+];
+
 function keywordEstimate(label) {
   const norm = ` ${normalize(label)} `;
+  for (const [keys, est] of OVERRIDES) if (keys.some((k) => norm.includes(` ${k} `))) return est;
   const ws = words(label);
   const head = ws[ws.length - 1];
   const hit = (k) => norm.includes(` ${k} `) || norm.includes(` ${k}s `) || (k.length >= 5 && norm.includes(k));
@@ -426,7 +433,7 @@ function keywordEstimate(label) {
 }
 
 // Words that change what a dish is, so "Crab cake" isn't treated as a dessert or "Sea cucumber" as a vegetable.
-const MODIFIERS = new Set(['crab', 'clam', 'lobster', 'fish', 'shrimp', 'prawn', 'oyster', 'salmon', 'tuna', 'sea', 'pork', 'beef', 'lamb', 'mutton', 'rabbit', 'chicken', 'meat', 'cabbage', 'arctic', 'angel', 'jelly', 'swiss', 'apple', 'moule', 'hangtown', 'potato', 'rice', 'cheese', 'egg', 'tofu', 'bean', 'pot', 'scotch', 'pasta', 'macaroni', 'jello', 'snicker', 'watergate', 'frogeye', 'cookie', 'glorified']);
+const MODIFIERS = new Set(['stuffed', 'filled', 'casserole', 'crab', 'clam', 'lobster', 'fish', 'shrimp', 'prawn', 'oyster', 'salmon', 'tuna', 'sea', 'pork', 'beef', 'lamb', 'mutton', 'rabbit', 'chicken', 'meat', 'cabbage', 'arctic', 'angel', 'jelly', 'swiss', 'apple', 'moule', 'hangtown', 'potato', 'rice', 'cheese', 'egg', 'tofu', 'bean', 'pot', 'scotch', 'pasta', 'macaroni', 'jello', 'snicker', 'watergate', 'frogeye', 'cookie', 'glorified']);
 
 // Maps a recognised dish label to a database entry or a dish-type estimate.
 const BY_NAME = new Map(FOODS.map((f) => [f.name, f]));
@@ -436,7 +443,7 @@ export function foodForLabel(label) {
   const lw = words(label);
   if (!lw.length) return null;
   const head = lw[lw.length - 1];
-  const modified = lw.slice(0, -1).some((w) => MODIFIERS.has(w));
+  const labelMods = lw.slice(0, -1).filter((w) => MODIFIERS.has(w));
   let best = null;
   let bestScore = 0;
   for (const p of PHRASES) {
@@ -444,7 +451,8 @@ export function foodForLabel(label) {
     const coverage = new Set(p.w).size / new Set(lw).size; // unique words, so "Double-Double" ≠ "Double Down"
 
     // Accept full matches, or partial ones that share the dish's head noun ("Chicken CURRY" → curry).
-    if (coverage < 1 && !(p.w[p.w.length - 1] === head && coverage >= 0.34 && !(modified && !p.w.some((w) => MODIFIERS.has(w))))) continue;
+    // A partial match must keep every dish-changing word ("STUFFED cabbage" can't become plain cabbage).
+    if (coverage < 1 && !(p.w[p.w.length - 1] === head && coverage >= 0.34 && labelMods.every((w) => p.w.includes(w)))) continue;
     const score = coverage * 10 + p.w.length;
     if (score > bestScore) {
       bestScore = score;

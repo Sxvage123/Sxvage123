@@ -8,7 +8,7 @@ import { generateChallenge } from './lib/challenges.js';
 import { settleLeague, LEAGUES } from './lib/league.js';
 import { weeklyRecap } from './lib/recap.js';
 import { dayKey, addDays } from './lib/dates.js';
-import { computeTargets } from './lib/nutrition.js';
+import { computeTargets, isMinor } from './lib/nutrition.js';
 import { xpPop, toast, confetti, haptic, sheet, esc, setHaptics } from './ui/dom.js';
 import { rankEmblem } from './ui/charts.js';
 
@@ -25,6 +25,7 @@ export const app = {
     this.state = state;
     this.views = views;
     setHaptics(state.settings.haptics);
+    applyTargetRules(state.profile);
     this.refresh();
     this.state.seen.tier = Math.max(this.state.seen.tier || 0, this.stats.rank.tier || 0);
     if (!this.state.seen.badges.length) this.state.seen.badges = this.badges.filter((b) => b.earned).map((b) => b.id);
@@ -54,7 +55,7 @@ export const app = {
       rankIndex: stats.rank.index,
       proteinGoal: s.profile?.proteinGoal,
       lastScanDate: lastScan?.date,
-      canScan: (s.profile?.age || 0) >= 18,
+      canScan: !!s.profile && !isMinor(s.profile),
     });
     saveState(s);
   },
@@ -69,7 +70,7 @@ export const app = {
       rankIndex: this.stats.rank.index,
       proteinGoal: s.profile?.proteinGoal,
       lastScanDate: lastScan?.date,
-      canScan: (s.profile?.age || 0) >= 18,
+      canScan: !!s.profile && !isMinor(s.profile),
       reroll: (cur.reroll || 0) + 1,
     });
     // Rerolling into the same challenge would feel broken; nudge until different.
@@ -86,7 +87,7 @@ export const app = {
     const beforeXP = this.stats?.xp || 0;
     mutator(this.state);
     invalidateMeals();
-    if (this.state.profile && !this.state.profile.customGoals) Object.assign(this.state.profile, targetsFor(this.state.profile));
+    applyTargetRules(this.state.profile);
     this.refresh();
     saveState(this.state);
     const gained = this.stats.xp - beforeXP;
@@ -196,6 +197,16 @@ export const app = {
   },
 };
 
+// Keeps targets in line with the rules: auto targets follow body stats, and under-18s never get a deficit
+// (even with custom targets, or a target saved by an older version).
+export function applyTargetRules(profile) {
+  if (!profile) return;
+  if (!profile.customGoals) Object.assign(profile, targetsFor(profile));
+  else if (isMinor(profile) && profile.calorieGoal < targetsFor({ ...profile, goal: 'maintain' }).calorieGoal) {
+    Object.assign(profile, targetsFor(profile), { customGoals: false });
+  }
+}
+
 export function targetsFor(profile) {
   const t = computeTargets(profile);
   return { calorieGoal: t.calories, proteinGoal: t.protein, carbsGoal: t.carbs, fatGoal: t.fat, tdee: t.tdee };
@@ -240,7 +251,7 @@ function showRankUp(rank, bigRank) {
 function showLeagueResult(r, newTier) {
   const league = LEAGUES[newTier];
   const msg = r.result === 'promoted' ? `Promoted to ${league.name}!` : r.result === 'demoted' ? `Demoted to ${league.name}` : `You held your spot in ${league.name}`;
-  const w = weeklyRecap(app.state, app.stats, r.week);
+  const w = weeklyRecap(app.state, r.week);
   if (r.result === 'promoted') confetti();
   const tile = (big, small) => `<div class="stat"><b>${big}</b><span>${small}</span></div>`;
   sheet((el, close) => {

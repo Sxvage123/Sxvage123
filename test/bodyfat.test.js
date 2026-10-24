@@ -115,3 +115,11 @@ test('no calorie deficit for under-18s', () => {
   const teen = computeTargets({ sex: 'male', age: 16, heightCm: 175, weightKg: 70, activity: 1.55, goal: 'cut' });
   assert.ok(teen.calories >= teen.tdee - 10);
 });
+
+test('stuffed dishes are meals, not raw vegetables', () => {
+  for (const l of ['Stuffed peppers', 'Stuffed cabbage', 'Stuffed mushrooms']) {
+    const m = foodForLabel(l);
+    assert.equal(m.estimated, true, l);
+    assert.ok(m.food.calories >= 300, `${l} ${m.food.calories}`);
+  }
+});

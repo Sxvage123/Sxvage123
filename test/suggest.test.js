@@ -11,3 +11,8 @@ test('suggests high-protein foods that fit the remaining calories', () => {
   }
   assert.deepEqual(suggestFoods(80, 50), []);
 });
+
+test('suggestions scale with a big gap', () => {
+  const big = suggestFoods(1500, 80);
+  assert.ok(big.some((f) => f.calories >= 400), big.map((f) => f.name).join());
+});
