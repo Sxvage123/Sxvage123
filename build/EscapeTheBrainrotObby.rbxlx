@@ -945,6 +945,13 @@ function Course.Build(): { BasePart }
 	local checkpoints = {}
 	local cf = CFrame.new(0, 10, -40)
 	part({ Name = "Lobby", Size = Vector3.new(60, 1, 60), CFrame = CFrame.new(0, 9.5, 0), Color = Color3.fromRGB(240, 240, 240), Material = Enum.Material.Marble })
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(10, 1, 10)
+	spawn.CFrame = CFrame.new(0, 10.5, 10)
+	spawn.Neutral = true
+	spawn.Color = Color3.fromRGB(255, 220, 90)
+	spawn.Parent = folder
 	for stage = 1, Config.StageCount + 1 do
 		local color = THEMES[(math.floor((stage - 1) / 5) % #THEMES) + 1]
 		local isFinish = stage == Config.StageCount + 1
@@ -964,7 +971,20 @@ function Course.Build(): { BasePart }
 		local d = (stage - 1) / Config.StageCount
 		local kind = ORDER[(stage - 1) % #ORDER + 1]
 		-- Builders start at the checkpoint's front edge.
+		local stageStart = cf
 		cf = CFrame.new(builders[kind](cf * CFrame.new(0, 0, -6), d, color).Position)
+		-- Kill plane under the whole stage so falling respawns you instantly.
+		local low = math.min(stageStart.Position.Y, cf.Position.Y) - 22
+		local midZ = (stageStart.Position.Z + cf.Position.Z) / 2
+		local length = math.abs(stageStart.Position.Z - cf.Position.Z) + 30
+		local fallZone = part({
+			Name = "FallZone",
+			Size = Vector3.new(160, 2, length),
+			CFrame = CFrame.new(cf.Position.X / 2 + stageStart.Position.X / 2, low, midZ),
+			Transparency = 1,
+			CanCollide = false,
+		})
+		fallZone:SetAttribute("Kill", true)
 	end
 	return checkpoints
 end
