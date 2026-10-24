@@ -1607,4 +1607,11 @@ UI.Label("Click / F = Parry\nQ = Dash", { Size = UDim2.fromOffset(130, 50), Pare
       </Item>
     </Item>
   </Item>
+  <Item class="Workspace" referent="17">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+  </Item>
 </roblox>

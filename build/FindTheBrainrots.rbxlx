@@ -1,0 +1,1406 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">ShopUI</string>
+          <string name="Source"><![CDATA[-- Shared Robux shop window + purchase helper used by every game's client.
+-- Expects Config.Passes/Products (name -> id) and Config.PassInfo/ProductInfo (display rows).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local UI = require(script.Parent.UI)
+
+local ShopUI = {}
+
+function ShopUI.Buyer(config, toast: (string, Color3?) -> ())
+	local player = Players.LocalPlayer
+	local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+	return function(kind: string, key: string)
+		if kind == "Pass" and player:GetAttribute("Pass_" .. key) then
+			return
+		end
+		local id = if kind == "Pass" then config.Passes[key] else config.Products[key]
+		if id and id > 0 then
+			if kind == "Pass" then
+				MarketplaceService:PromptGamePassPurchase(player, id)
+			else
+				MarketplaceService:PromptProductPurchase(player, id)
+			end
+		elseif RunService:IsStudio() then
+			testPurchase:FireServer(kind, key)
+			toast("[Studio test] granted " .. key, Color3.fromRGB(255, 215, 0))
+		else
+			toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+		end
+	end
+end
+
+-- Returns the (hidden) shop frame; toggle its Visible to open it.
+function ShopUI.Create(gui: ScreenGui, config, buy: (string, string) -> (), theme: Color3?): Frame
+	local player = Players.LocalPlayer
+	local bg = theme or Color3.fromRGB(40, 40, 60)
+	local frame = UI.new("Frame", {
+		Name = "Shop",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, 520, 0.7, 0),
+		BackgroundColor3 = bg,
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 560)
+	c.Parent = frame
+	UI.Label("SHOP", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame }).Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		Parent = frame,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
+
+	local order = 0
+	local function item(info, kind: string)
+		order += 1
+		local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12), LayoutOrder = order, Parent = list }, { UI.Corner(12) })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(215, 215, 230), Parent = row })
+		local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(120, 52),
+			Parent = row,
+		})
+		if kind == "Pass" then
+			local function owned()
+				if player:GetAttribute("Pass_" .. info.Key) then
+					b.Text = "OWNED"
+					b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+				end
+			end
+			player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+			owned()
+		end
+		b.Activated:Connect(function()
+			buy(kind, info.Key)
+		end)
+	end
+	for _, info in config.ProductInfo do
+		item(info, "Product")
+	end
+	for _, info in config.PassInfo do
+		item(info, "Pass")
+	end
+	return frame
+end
+
+-- Gold [VIP] chat tag for players owning the given pass.
+function ShopUI.VIPChatTag(passKey: string)
+	local TextChatService = game:GetService("TextChatService")
+	TextChatService.OnIncomingMessage = function(message)
+		local props = Instance.new("TextChatMessageProperties")
+		local source = message.TextSource
+		local speaker = source and Players:GetPlayerByUserId(source.UserId)
+		if speaker and speaker:GetAttribute("Pass_" .. passKey) then
+			props.PrefixText = "<font color='#FFD700'>[VIP]</font> " .. message.PrefixText
+		end
+		return props
+	end
+end
+
+-- Column of big buttons on the left edge.
+function ShopUI.SideBar(gui: ScreenGui): Frame
+	local side = UI.new("Frame", {
+		Name = "SideBar",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(130, 330),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}) :: Frame
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = side
+	return side
+end
+
+return ShopUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Find the Brainrots. Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	Radar = 0,
+	Teleporter = 0,
+	SpeedCoil = 0,
+	GravityCoil = 0,
+}
+Config.PassInfo = {
+	{ Key = "Radar", Name = "Brainrot Radar", Price = 199, Description = "A beam always points to the nearest brainrot you haven't found" },
+	{ Key = "Teleporter", Name = "Teleporter", Price = 99, Description = "Teleport to any zone instantly" },
+	{ Key = "SpeedCoil", Name = "Speed Coil", Price = 79, Description = "Run 75% faster" },
+	{ Key = "GravityCoil", Name = "Gravity Coil", Price = 79, Description = "Jump way higher" },
+}
+Config.Products = {
+	Hint = 0,
+	AutoFind = 0,
+}
+Config.ProductInfo = {
+	{ Key = "Hint", Name = "Show Me One", Price = 15, Description = "A beam leads you to an unfound brainrot for 60s" },
+	{ Key = "AutoFind", Name = "Instant Find", Price = 49, Description = "Instantly collect a random brainrot you're missing" },
+}
+
+Config.Names = {
+	"Noobini Pizzanini", "Lirili Larila", "Tim Cheese", "Fluriflura", "Talpa di Fero", "Svinina Bombardino",
+	"Pipi Kiwi", "Trippi Troppi", "Tung Tung Tung Sahur", "Gangster Footera", "Brr Brr Patapim",
+	"Chimpanzini Bananini", "Ballerina Cappuccina", "Cappuccino Assassino", "Frigo Camelo",
+	"Bombardiro Crocodilo", "Orangutini Ananasini", "Cocofanto Elefanto", "Tralalero Tralala",
+	"Odin Din Din Dun", "La Vacca Saturno", "Garama", "Madundung", "Skibidi Toilet", "Rizzler",
+	"Gyatt Gator", "Ohio Ohio", "Sigma Boy", "Mewing Mango", "Fanum Tax Fox", "Bombombini Gusini",
+	"Burbaloni Lulilolli", "Glorbo Fruttodrillo", "Trulimero Trulicina", "Bobritto Bandito",
+	"Zibra Zubra Zibralini", "Tric Trac Baraboom", "Spaghetti Tualetti", "Il Cacto Hipopotamo", "Blueberrinni Octopussini",
+}
+
+Config.ZoneSpawns = {
+	{ Name = "Town", Position = Vector3.new(0, 4, 0) },
+	{ Name = "Forest", Position = Vector3.new(220, 4, 0) },
+	{ Name = "Desert", Position = Vector3.new(-220, 4, 0) },
+	{ Name = "Pond", Position = Vector3.new(0, 4, 95) },
+	{ Name = "Sky Islands", Position = Vector3.new(0, 4, -100) },
+}
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		-- Already applied in memory; only confirm once it's actually saved
+		-- (an earlier save may have failed).
+		if DataService.Save(player, false) then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="11">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="Script" referent="12">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Find the Brainrots server: collectibles, saving, hints, teleports, coils.
+local BadgeService = game:GetService("BadgeService")
+local CollectionService = game:GetService("CollectionService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+local World = require(script.Parent.World)
+
+-- Optional: put a Badge ID here to award when someone finds every brainrot.
+local COMPLETION_BADGE_ID = 0
+
+Lighting.ClockTime = 14
+Lighting.Brightness = 2.5
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local GuideRemote = remote("RemoteEvent", "Guide")
+local TeleportRemote = remote("RemoteEvent", "Teleport")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+local spots = World.Build()
+local TOTAL = math.min(#spots, #Config.Names)
+workspace:SetAttribute("TotalBrainrots", TOTAL)
+
+local collectFolder = Instance.new("Folder")
+collectFolder.Name = "Collectibles"
+collectFolder.Parent = workspace
+
+local collectibles = {}
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local list, count = {}, 0
+	for id in data.Found do
+		table.insert(list, id)
+		count += 1
+	end
+	player:SetAttribute("Found", table.concat(list, ","))
+	player:SetAttribute("FoundCount", count)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Found.Value = count
+	end
+end
+
+local function collect(player: Player, index: number)
+	local data = DataService.Get(player)
+	local key = tostring(index)
+	if not data or data.Found[key] then
+		return
+	end
+	data.Found[key] = true
+	local count = 0
+	for _ in data.Found do
+		count += 1
+	end
+	notify(player, "Found " .. Config.Names[index] .. "! (" .. count .. "/" .. TOTAL .. ")", Color3.fromHSV(index / TOTAL, 0.7, 1))
+	if count >= TOTAL then
+		notify(nil, player.DisplayName .. " FOUND ALL " .. TOTAL .. " BRAINROTS!", Color3.fromRGB(255, 215, 0))
+		if COMPLETION_BADGE_ID > 0 then
+			pcall(BadgeService.AwardBadge, BadgeService, player.UserId, COMPLETION_BADGE_ID)
+		end
+	end
+	sync(player)
+end
+
+for index = 1, TOTAL do
+	local s = spots[index]
+	local color = Color3.fromHSV(index / TOTAL, 0.7, 1)
+	local model = Instance.new("Model")
+	model.Name = "Brainrot" .. index
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Shape = Enum.PartType.Ball
+	body.Size = Vector3.one * 2.6
+	body.Color = color
+	body.Material = Enum.Material.SmoothPlastic
+	body.Anchored = true
+	body.CanCollide = false
+	body.Position = s.Position
+	body.Parent = model
+	for _, side in { -1, 1 } do
+		local eye = Instance.new("Part")
+		eye.Shape = Enum.PartType.Ball
+		eye.Size = Vector3.one * 0.7
+		eye.Color = Color3.new(1, 1, 1)
+		eye.Anchored = false
+		eye.Massless = true
+		eye.CanCollide = false
+		eye.CanTouch = false
+		eye.Position = s.Position + Vector3.new(side * 0.5, 0.4, -1.1)
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = eye
+		weld.Parent = eye
+		eye.Parent = model
+	end
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(160, 30)
+	gui.StudsOffset = Vector3.new(0, 2.5, 0)
+	gui.MaxDistance = 30
+	gui.Parent = body
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.Text = Config.Names[index]
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = label
+	label.Parent = gui
+	model.PrimaryPart = body
+	model:SetAttribute("Index", index)
+	model.Parent = collectFolder
+	CollectionService:AddTag(model, "Collectible")
+	collectibles[index] = body
+	body.Touched:Connect(function(hit)
+		local character = hit:FindFirstAncestorOfClass("Model")
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if player then
+			collect(player, index)
+		end
+	end)
+end
+
+local function applyCoils(player: Player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.UseJumpPower = true
+		humanoid.WalkSpeed = if MonetizationService.OwnsPass(player, "SpeedCoil") then 28 else 16
+		humanoid.JumpPower = if MonetizationService.OwnsPass(player, "GravityCoil") then 85 else 50
+	end
+end
+
+TeleportRemote.OnServerEvent:Connect(function(player, zoneIndex)
+	local zone = type(zoneIndex) == "number" and Config.ZoneSpawns[zoneIndex]
+	if zone and MonetizationService.OwnsPass(player, "Teleporter") and player.Character then
+		player.Character:PivotTo(CFrame.new(zone.Position))
+	end
+end)
+
+local function unfound(data): { number }
+	local list = {}
+	for index = 1, TOTAL do
+		if not data.Found[tostring(index)] then
+			table.insert(list, index)
+		end
+	end
+	return list
+end
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local found = Instance.new("IntValue")
+	found.Name = "Found"
+	found.Parent = stats
+	stats.Parent = player
+	for key in data.Found do
+		local n = tonumber(key)
+		if not n or n > TOTAL then
+			data.Found[key] = nil
+		end
+	end
+	sync(player)
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid", 10)
+		applyCoils(player)
+	end)
+	if player.Character then
+		applyCoils(player)
+	end
+end)
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		Hint = function(player, data)
+			local list = unfound(data)
+			if #list == 0 then
+				notify(player, "You already found them all!", Color3.fromRGB(255, 215, 0))
+				return true
+			end
+			local index = list[math.random(1, #list)]
+			GuideRemote:FireClient(player, collectibles[index].Position, 60, spots[index].Hint)
+			return true
+		end,
+		AutoFind = function(player, data)
+			local list = unfound(data)
+			if #list > 0 then
+				collect(player, list[math.random(1, #list)])
+			end
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		applyCoils(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+-- Hints are public so the index can show them.
+local hints = {}
+for index = 1, TOTAL do
+	hints[index] = spots[index].Hint
+end
+local hintsValue = Instance.new("StringValue")
+hintsValue.Name = "Hints"
+hintsValue.Value = game:GetService("HttpService"):JSONEncode(hints)
+hintsValue.Parent = ReplicatedStorage
+
+DataService.Init("FindTheBrainrots_v1", {
+	Found = {},
+})
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
+        <Properties>
+          <string name="Name">World</string>
+          <string name="Source"><![CDATA[-- Builds every zone and returns hiding spots: { Position, Hint } in a fixed order.
+local World = {}
+
+local folder: Folder
+local function part(props): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	p.Parent = folder
+	return p
+end
+
+local function truss(bottom: Vector3, height: number)
+	local t = Instance.new("TrussPart")
+	t.Anchored = true
+	t.Size = Vector3.new(2, height, 2)
+	t.Position = bottom + Vector3.new(0, height / 2, 0)
+	t.Parent = folder
+end
+
+local spots = {}
+local function spot(position: Vector3, hint: string)
+	table.insert(spots, { Position = position, Hint = hint })
+end
+
+-- Hollow house with a door gap, a roof you can reach by ladder.
+local function house(center: Vector3, color: Color3, zone: string)
+	local w, h = 16, 10
+	part({ Size = Vector3.new(w, 1, w), Position = center + Vector3.new(0, 0.5, 0), Color = Color3.fromRGB(150, 120, 90), Material = Enum.Material.WoodPlanks })
+	part({ Size = Vector3.new(w, h, 1), Position = center + Vector3.new(0, h / 2 + 1, w / 2), Color = color, Material = Enum.Material.Brick })
+	part({ Size = Vector3.new(1, h, w), Position = center + Vector3.new(w / 2, h / 2 + 1, 0), Color = color, Material = Enum.Material.Brick })
+	part({ Size = Vector3.new(1, h, w), Position = center + Vector3.new(-w / 2, h / 2 + 1, 0), Color = color, Material = Enum.Material.Brick })
+	-- front wall with a door
+	part({ Size = Vector3.new(5.5, h, 1), Position = center + Vector3.new(-5.25, h / 2 + 1, -w / 2), Color = color, Material = Enum.Material.Brick })
+	part({ Size = Vector3.new(5.5, h, 1), Position = center + Vector3.new(5.25, h / 2 + 1, -w / 2), Color = color, Material = Enum.Material.Brick })
+	part({ Size = Vector3.new(5, 3, 1), Position = center + Vector3.new(0, h - 0.5, -w / 2), Color = color, Material = Enum.Material.Brick })
+	part({ Size = Vector3.new(w + 2, 1, w + 2), Position = center + Vector3.new(0, h + 1.5, 0), Color = Color3.fromRGB(140, 50, 40), Material = Enum.Material.Slate })
+	truss(center + Vector3.new(w / 2 + 1.5, 0, 4), h + 2)
+	spot(center + Vector3.new(4, 2.5, 5), "Inside a house in " .. zone)
+	spot(center + Vector3.new(-4, h + 3.5, -4), "On a roof in " .. zone .. " (find the ladder!)")
+end
+
+local function tree(base: Vector3)
+	part({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(14, 3, 3), CFrame = CFrame.new(base + Vector3.new(0, 7, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 75, 45), Material = Enum.Material.Wood })
+	part({ Shape = Enum.PartType.Ball, Size = Vector3.one * 12, Position = base + Vector3.new(0, 16, 0), Color = Color3.fromRGB(60, 150, 60), Material = Enum.Material.Grass, CanCollide = false })
+end
+
+-- Stepped pyramid: 2-stud steps are easy to walk up.
+local function pyramid(center: Vector3, layers: number, zone: string)
+	for i = 0, layers - 1 do
+		local size = (layers - i) * 6
+		part({ Size = Vector3.new(size, 2, size), Position = center + Vector3.new(0, 1 + i * 2, 0), Color = Color3.fromRGB(225, 195, 120), Material = Enum.Material.Sandstone })
+	end
+	spot(center + Vector3.new(0, layers * 2 + 1.5, 0), "On top of a pyramid in the " .. zone)
+end
+
+local function tower(base: Vector3, height: number, zone: string, color: Color3)
+	part({ Size = Vector3.new(8, height, 8), Position = base + Vector3.new(0, height / 2, 0), Color = color, Material = Enum.Material.Concrete })
+	truss(base + Vector3.new(5, 0, 0), height)
+	spot(base + Vector3.new(0, height + 1.5, 0), "On top of a tall tower in " .. zone)
+end
+
+function World.Build()
+	folder = Instance.new("Folder")
+	folder.Name = "World"
+	folder.Parent = workspace
+	local rng = Random.new(7)
+
+	-- Ground for each land zone
+	part({ Name = "TownGround", Size = Vector3.new(180, 2, 180), Position = Vector3.new(0, -1, 0), Color = Color3.fromRGB(110, 200, 100), Material = Enum.Material.Grass })
+	part({ Name = "ForestGround", Size = Vector3.new(160, 2, 180), Position = Vector3.new(220, -1, 0), Color = Color3.fromRGB(70, 140, 60), Material = Enum.Material.Grass })
+	part({ Name = "DesertGround", Size = Vector3.new(160, 2, 180), Position = Vector3.new(-220, -1, 0), Color = Color3.fromRGB(235, 210, 150), Material = Enum.Material.Sand })
+	part({ Name = "Bridge", Size = Vector3.new(400, 1, 10), Position = Vector3.new(0, -0.5, 0), Color = Color3.fromRGB(150, 110, 70), Material = Enum.Material.WoodPlanks })
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = Vector3.new(0, 0.5, 0)
+	spawn.Neutral = true
+	spawn.Color = Color3.fromRGB(255, 215, 0)
+	spawn.Material = Enum.Material.Neon
+	spawn.Parent = folder
+
+	-- Town: 6 houses + a clock tower
+	local colors = { Color3.fromRGB(240, 120, 120), Color3.fromRGB(120, 170, 240), Color3.fromRGB(250, 220, 120), Color3.fromRGB(150, 220, 150), Color3.fromRGB(220, 150, 230), Color3.fromRGB(240, 170, 110) }
+	local housePositions = { Vector3.new(-50, 0, -50), Vector3.new(0, 0, -55), Vector3.new(50, 0, -50), Vector3.new(-50, 0, 50), Vector3.new(0, 0, 55), Vector3.new(50, 0, 50) }
+	for i, pos in housePositions do
+		house(pos, colors[i], "Town")
+	end
+	tower(Vector3.new(-65, 0, 0), 40, "Town", Color3.fromRGB(200, 200, 210))
+	spot(Vector3.new(70, 1.5, 0), "Behind the fountain in Town")
+	part({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(3, 14, 14), CFrame = CFrame.new(60, 1.5, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(180, 180, 190), Material = Enum.Material.Marble })
+
+	-- Forest: trees, a log cabin, a lookout tower
+	for _ = 1, 40 do
+		tree(Vector3.new(220 + rng:NextNumber(-70, 70), 0, rng:NextNumber(-80, 80)))
+	end
+	house(Vector3.new(200, 0, -40), Color3.fromRGB(130, 90, 60), "the Forest")
+	house(Vector3.new(250, 0, 50), Color3.fromRGB(110, 80, 55), "the Forest")
+	tower(Vector3.new(270, 0, -60), 55, "the Forest", Color3.fromRGB(120, 90, 60))
+	for i = 1, 5 do
+		spot(Vector3.new(220 + rng:NextNumber(-60, 60), 1.5, rng:NextNumber(-70, 70)), "Hidden between the trees in the Forest (#" .. i .. ")")
+	end
+
+	-- Desert: pyramids and a ruin
+	pyramid(Vector3.new(-200, 0, -40), 9, "Desert")
+	pyramid(Vector3.new(-250, 0, 40), 6, "Desert")
+	pyramid(Vector3.new(-170, 0, 60), 4, "Desert")
+	house(Vector3.new(-260, 0, -60), Color3.fromRGB(200, 170, 110), "the Desert")
+	for i = 1, 4 do
+		local base = Vector3.new(-220 + rng:NextNumber(-60, 60), 0, rng:NextNumber(-80, 80))
+		part({ Size = Vector3.new(2, 8, 2), Position = base + Vector3.new(0, 4, 0), Color = Color3.fromRGB(70, 160, 70), Material = Enum.Material.Grass })
+		spot(base + Vector3.new(2, 1.5, 0), "Next to a cactus in the Desert (#" .. i .. ")")
+	end
+
+	-- Pond: real water, brainrots on the bottom and on a little island
+	workspace.Terrain:FillBlock(CFrame.new(0, -6, 150), Vector3.new(100, 12, 100), Enum.Material.Water)
+	part({ Name = "PondFloor", Size = Vector3.new(100, 2, 100), Position = Vector3.new(0, -13, 150), Color = Color3.fromRGB(190, 170, 130), Material = Enum.Material.Sand })
+	for _, rim in {
+		{ Vector3.new(120, 2, 10), Vector3.new(0, -1, 95) },
+		{ Vector3.new(120, 2, 10), Vector3.new(0, -1, 205) },
+		{ Vector3.new(10, 2, 120), Vector3.new(-55, -1, 150) },
+		{ Vector3.new(10, 2, 120), Vector3.new(55, -1, 150) },
+	} do
+		part({ Name = "PondRim", Size = rim[1], Position = rim[2], Color = Color3.fromRGB(110, 200, 100), Material = Enum.Material.Grass })
+	end
+	part({ Name = "Island", Shape = Enum.PartType.Cylinder, Size = Vector3.new(14, 16, 16), CFrame = CFrame.new(20, -5, 160) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 200, 100), Material = Enum.Material.Grass })
+	spot(Vector3.new(20, 3.5, 160), "On the tiny island in the Pond")
+	spot(Vector3.new(-30, -10.5, 170), "At the bottom of the Pond (swim down!)")
+	spot(Vector3.new(30, -10.5, 120), "Deep in the Pond near the shore")
+
+	-- Sky Islands: a staircase of floating platforms going up
+	local pos = Vector3.new(0, 2, -110)
+	part({ Size = Vector3.new(20, 1, 20), Position = Vector3.new(0, -0.5, -100), Color = Color3.fromRGB(200, 200, 255) })
+	for i = 1, 24 do
+		pos += Vector3.new(rng:NextNumber(-5, 5), 3.5, -9)
+		local size = if i % 6 == 0 then 14 else 7
+		part({ Size = Vector3.new(size, 1, size), Position = pos, Color = Color3.fromHSV(i / 24, 0.5, 1), Material = Enum.Material.SmoothPlastic })
+		if i % 6 == 0 then
+			spot(pos + Vector3.new(0, 2, 0), "Sky Islands, floating platform " .. i)
+		end
+	end
+	spot(pos + Vector3.new(3, 2, 0), "At the very top of the Sky Islands")
+
+	return spots
+end
+
+return World
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="14">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="15">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="16">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="17">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Find the Brainrots client: counter, index with hints, radar/guide beams, teleports, spinning collectibles.
+local CollectionService = game:GetService("CollectionService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local ShopUI = require(ReplicatedStorage.Common.ShopUI)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local hints = HttpService:JSONDecode((ReplicatedStorage:WaitForChild("Hints") :: StringValue).Value)
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+local buy = ShopUI.Buyer(Config, toast)
+local shop = ShopUI.Create(gui, Config, buy, Color3.fromRGB(40, 60, 40))
+
+local counter = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(300, 60),
+	BackgroundColor3 = Color3.fromRGB(30, 50, 30),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local counterLabel = UI.Label("", { Size = UDim2.new(1, -10, 1, -8), Position = UDim2.fromOffset(5, 4), Parent = counter })
+
+local found: { [number]: boolean } = {}
+local function refreshFound()
+	table.clear(found)
+	for id in string.gmatch(player:GetAttribute("Found") or "", "[^,]+") do
+		found[tonumber(id) :: number] = true
+	end
+	counterLabel.Text = "Found " .. (player:GetAttribute("FoundCount") or 0) .. " / " .. (workspace:GetAttribute("TotalBrainrots") or #hints)
+end
+player:GetAttributeChangedSignal("Found"):Connect(refreshFound)
+refreshFound()
+
+---------------------------------------------------------------- beams (radar + paid guide)
+
+local function makeBeam(color: Color3): (Beam, Attachment)
+	local target = Instance.new("Attachment")
+	target.Parent = workspace.Terrain
+	local beam = Instance.new("Beam")
+	beam.Attachment1 = target
+	beam.Color = ColorSequence.new(color)
+	beam.Width0 = 0.6
+	beam.Width1 = 0.6
+	beam.FaceCamera = true
+	beam.LightEmission = 1
+	beam.Enabled = false
+	beam.Parent = workspace.Terrain
+	return beam, target
+end
+local radarBeam, radarTarget = makeBeam(Color3.fromRGB(0, 255, 200))
+local guideBeam, guideTarget = makeBeam(Color3.fromRGB(255, 215, 0))
+local guideUntil = 0
+
+remotes:WaitForChild("Guide").OnClientEvent:Connect(function(position: Vector3, seconds: number, hint: string)
+	guideTarget.WorldPosition = position
+	guideUntil = os.clock() + seconds
+	toast("Follow the gold beam! Hint: " .. hint, Color3.fromRGB(255, 215, 0))
+end)
+
+local rootAttachment: Attachment? = nil
+local function onCharacter(character: Model)
+	local root = character:WaitForChild("HumanoidRootPart", 10)
+	if root then
+		local a = Instance.new("Attachment")
+		a.Parent = root
+		rootAttachment = a
+		radarBeam.Attachment0 = a
+		guideBeam.Attachment0 = a
+	end
+end
+player.CharacterAdded:Connect(onCharacter)
+if player.Character then
+	task.spawn(onCharacter, player.Character)
+end
+
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local nearest, nearestDist = nil, math.huge
+	for _, model in CollectionService:GetTagged("Collectible") do
+		local body = (model :: Model).PrimaryPart
+		local index = model:GetAttribute("Index")
+		if body and index then
+			-- Spin + bob, and fade the ones you've found.
+			local base = body:GetAttribute("BasePos") or body.Position
+			body:SetAttribute("BasePos", base)
+			local isFound = found[index] == true
+			body.Transparency = if isFound then 0.75 else 0
+			if root and not isFound then
+				local d = (base - root.Position).Magnitude
+				if d < nearestDist then
+					nearest, nearestDist = base, d
+				end
+			end
+			body.CFrame = CFrame.new(base + Vector3.new(0, math.sin(t * 2 + index) * 0.4, 0)) * CFrame.Angles(0, t * 1.5 + index, 0)
+		end
+	end
+	radarBeam.Enabled = rootAttachment ~= nil and nearest ~= nil and player:GetAttribute("Pass_Radar") == true
+	if nearest then
+		radarTarget.WorldPosition = nearest
+	end
+	guideBeam.Enabled = rootAttachment ~= nil and t < guideUntil
+end)
+
+---------------------------------------------------------------- index
+
+local index = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 560, 0.72, 0),
+	BackgroundColor3 = Color3.fromRGB(30, 50, 30),
+	Visible = false,
+	Parent = gui,
+}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+UI.Label("BRAINROT INDEX", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = index })
+UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = index }).Activated:Connect(function()
+	index.Visible = false
+end)
+local list = UI.new("ScrollingFrame", {
+	Position = UDim2.fromOffset(12, 64),
+	Size = UDim2.new(1, -24, 1, -76),
+	BackgroundTransparency = 1,
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	ScrollBarThickness = 8,
+	Parent = index,
+})
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = list
+
+local function renderIndex()
+	for _, c in list:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	for i, hint in hints do
+		local isFound = found[i]
+		local row = UI.new("Frame", { LayoutOrder = i, Size = UDim2.new(1, -10, 0, 58), BackgroundColor3 = if isFound then Color3.fromRGB(50, 90, 50) else Color3.fromRGB(45, 55, 45), Parent = list }, { UI.Corner(10) })
+		UI.Label((if isFound then "✅ " .. Config.Names[i] else "❓ " .. Config.Names[i]), { Position = UDim2.fromOffset(10, 2), Size = UDim2.new(1, -20, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = if isFound then Color3.fromHSV(i / #hints, 0.6, 1) else Color3.fromRGB(200, 200, 200), Parent = row })
+		UI.Label("Hint: " .. hint, { Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -20, 0, 22), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(210, 220, 210), Parent = row })
+	end
+end
+player:GetAttributeChangedSignal("Found"):Connect(function()
+	if index.Visible then
+		renderIndex()
+	end
+end)
+
+---------------------------------------------------------------- teleport menu
+
+local tpFrame = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 150, 0.5, 0),
+	Size = UDim2.fromOffset(170, 5 * 52 + 10),
+	BackgroundTransparency = 1,
+	Visible = false,
+	Parent = gui,
+})
+local tpLayout = Instance.new("UIListLayout")
+tpLayout.Padding = UDim.new(0, 6)
+tpLayout.Parent = tpFrame
+for i, zone in Config.ZoneSpawns do
+	UI.Button(zone.Name, Color3.fromRGB(80, 140, 255), { Size = UDim2.fromOffset(170, 46), Parent = tpFrame }).Activated:Connect(function()
+		remotes.Teleport:FireServer(i)
+		tpFrame.Visible = false
+	end)
+end
+
+local side = ShopUI.SideBar(gui)
+UI.Button("INDEX", Color3.fromRGB(255, 170, 0), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	shop.Visible = false
+	index.Visible = not index.Visible
+	if index.Visible then
+		renderIndex()
+	end
+end)
+UI.Button("TELEPORT", Color3.fromRGB(80, 140, 255), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	if player:GetAttribute("Pass_Teleporter") then
+		tpFrame.Visible = not tpFrame.Visible
+	else
+		buy("Pass", "Teleporter")
+	end
+end)
+UI.Button("HINT", Color3.fromRGB(255, 215, 0), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	buy("Product", "Hint")
+end)
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	index.Visible = false
+	shop.Visible = not shop.Visible
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="18">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+  </Item>
+</roblox>
