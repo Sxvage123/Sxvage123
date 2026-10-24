@@ -5,16 +5,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import brainrot_specs as specs
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-NAMES = {
-    "tralalero": "Tralalero Tralala", "bombardiro": "Bombardiro Crocodilo", "tung": "Tung Tung Tung Sahur",
-    "ballerina": "Ballerina Cappuccina", "chimpanzini": "Chimpanzini Bananini", "patapim": "Brr Brr Patapim",
-    "lirili": "Lirili Larila", "cappuccino": "Cappuccino Assassino", "tim_cheese": "Tim Cheese",
-    "noobini": "Noobini Pizzanini", "frigo": "Frigo Camelo", "cocofanto": "Cocofanto Elefanto",
-    "la_vacca": "La Vacca Saturno Saturnita", "odin_din": "Odin Din Din Dun", "trippi": "Trippi Troppi",
-    "fluri": "Fluriflura", "talpa": "Talpa di Fero", "svinina": "Svinina Bombardino", "pipi_kiwi": "Pipi Kiwi",
-    "gangster": "Gangster Footera", "orangutini": "Orangutini Ananasini", "skibidi": "Skibidi Toilet",
-    "garama": "Garama and Madundung",
-}
+from brainrot_names import NAMES
 
 def bounds(parts):
     lo, hi = [1e9] * 3, [-1e9] * 3

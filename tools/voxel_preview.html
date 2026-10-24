@@ -1,0 +1,67 @@
+<title>Brainrot Model Lineup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito+Sans:wght@400;700&display=swap">
+<style>
+/* Layout: toy-catalog grid of rendered voxel figures */
+:root {
+  --bg: #f3f5fa; --surface: #ffffff; --fg: #1b1f2e; --muted: #5d6478; --line: #dde1ec;
+  --display: "Fredoka", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --body: "Nunito Sans", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #12141c; --surface: #1c1f2b; --fg: #eef0f7; --muted: #9aa1b5; --line: #2c3040; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #12141c; --surface: #1c1f2b; --fg: #eef0f7; --muted: #9aa1b5; --line: #2c3040; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+main { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); margin: 0; text-wrap: balance; }
+.intro { max-width: 65ch; color: var(--muted); margin: 6px 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 6px; min-width: 0; }
+.card img { width: 100%; aspect-ratio: 1; border-radius: 8px; background: linear-gradient(#bfe0ff, #eaf5ff); display: block; }
+.name { font-weight: 700; font-size: 14px; line-height: 1.25; }
+.meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+<main>
+  <header>
+    <h1>Brainrot Model Lineup</h1>
+    <p class="intro">Voxel versions of each character, in the same blocky style Steal a Brainrot uses. Each one is rendered from the exact block list the game code builds, shown from a three-quarter front view.</p>
+  </header>
+  <div class="grid" id="grid"></div>
+</main>
+<!--THREE-->
+<script>
+const DATA = /*DATA*/null;
+const NAMES = /*NAMES*/null;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+renderer.setSize(400, 400); renderer.setPixelRatio(1);
+function build(ch, res) {
+  const g = new THREE.Group();
+  const mats = ch.palette.map(c => new THREE.MeshLambertMaterial({ color: new THREE.Color(`rgb(${c[0]},${c[1]},${c[2]})`) }));
+  for (const [i, j, k, si, sj, sk, p] of ch.boxes) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(si * res, sj * res, sk * res), mats[p - 1]);
+    m.position.set(ch.lo[0] + (i + si / 2) * res, ch.lo[1] + (j + sj / 2) * res, ch.lo[2] + (k + sk / 2) * res);
+    g.add(m);
+  }
+  return g;
+}
+function snap(group) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(-6, 10, -8); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.25); fill.position.set(8, 3, 6); scene.add(fill);
+  scene.add(group);
+  const bb = new THREE.Box3().setFromObject(group);
+  const c = bb.getCenter(new THREE.Vector3()); const s = bb.getSize(new THREE.Vector3()).length();
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 500);
+  cam.position.set(c.x + s * 1.0, c.y + s * 0.35, c.z - s * 1.25); cam.lookAt(c);
+  renderer.render(scene, cam);
+  return renderer.domElement.toDataURL("image/png");
+}
+const grid = document.getElementById("grid");
+for (const [id, ch] of Object.entries(DATA.chars)) {
+  const el = document.createElement("div"); el.className = "card";
+  el.innerHTML = `<img alt="${NAMES[id] || id}" src="${snap(build(ch, DATA.res))}"><div class="name">${NAMES[id] || id}</div><div class="meta">${ch.boxes.length} parts</div>`;
+  grid.appendChild(el);
+}
+document.body.dataset.ready = "1";
+</script>
