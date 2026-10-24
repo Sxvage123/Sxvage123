@@ -5,7 +5,7 @@ import { esc } from './dom.js';
 const W = 340;
 
 // points: [{x: label, y: number, lo?, hi?}] in chronological order
-export function lineChart(points, { height = 170, color = 'var(--accent)', unit = '', band = true, goal = null, decimals = 1 } = {}) {
+export function lineChart(points, { height = 170, color = 'var(--accent)', unit = '', band = true, goal = null, decimals = 1, label = 'Trend chart' } = {}) {
   if (points.length === 0) return '<div class="chart-empty">No data yet</div>';
   const pad = { l: 34, r: 12, t: 14, b: 26 };
   const ys = points.flatMap((p) => [p.y, p.lo ?? p.y, p.hi ?? p.y]);
@@ -35,7 +35,7 @@ export function lineChart(points, { height = 170, color = 'var(--accent)', unit 
   const labelIdx = points.length <= 6 ? points.map((_, i) => i) : [0, Math.floor((points.length - 1) / 2), points.length - 1];
   const gid = `g${Math.random().toString(36).slice(2, 7)}`;
   return `
-  <svg class="chart" viewBox="0 0 ${W} ${height}" preserveAspectRatio="none" role="img">
+  <svg class="chart" viewBox="0 0 ${W} ${height}" preserveAspectRatio="none" role="img" aria-label="${esc(`${label}: latest ${points[points.length - 1].y.toFixed(decimals)}${unit}`)}">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${color}" stop-opacity="0.35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
     </linearGradient></defs>
@@ -51,7 +51,7 @@ export function lineChart(points, { height = 170, color = 'var(--accent)', unit 
 }
 
 // bars: [{x: label, y: number, color?}]
-export function barChart(bars, { height = 160, goal = null, color = 'var(--accent)' } = {}) {
+export function barChart(bars, { height = 160, goal = null, color = 'var(--accent)', label = 'Bar chart' } = {}) {
   if (!bars.length) return '<div class="chart-empty">No data yet</div>';
   const pad = { l: 8, r: 8, t: 14, b: 22 };
   const max = Math.max(goal || 0, ...bars.map((b) => b.y)) * 1.12 || 1;
@@ -60,7 +60,7 @@ export function barChart(bars, { height = 160, goal = null, color = 'var(--accen
   const bw = iw / bars.length;
   const Y = (v) => pad.t + (1 - v / max) * ih;
   return `
-  <svg class="chart" viewBox="0 0 ${W} ${height}" preserveAspectRatio="none" role="img">
+  <svg class="chart" viewBox="0 0 ${W} ${height}" preserveAspectRatio="none" role="img" aria-label="${esc(label)}">
     ${bars
       .map((b, i) => {
         const h = Math.max(b.y > 0 ? 3 : 0, (b.y / max) * ih);

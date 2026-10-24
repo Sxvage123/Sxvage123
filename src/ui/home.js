@@ -32,13 +32,13 @@ export function renderHome(root, app) {
       <div class="muted small">${greet},</div>
       <h1 class="h1">${esc(p.name)}</h1>
     </div>
-    <button class="streak-chip ${streak.activeToday ? 'lit' : streak.current ? 'risk' : ''}" data-streak>
+    <button aria-label="Streak details" class="streak-chip ${streak.activeToday ? 'lit' : streak.current ? 'risk' : ''}" data-streak>
       <span class="flame">🔥</span><b>${streak.current}</b>
       ${streak.freezes ? `<span class="freeze" title="Streak freezes">🧊${streak.freezes}</span>` : ''}
     </button>
   </header>
 
-  <section class="card rank-card" data-go="progress" style="--rank:${rank.color};--rank-glow:${rank.glow}">
+  <section class="card rank-card" data-go="progress" role="button" tabindex="0" aria-label="Open ranks" style="--rank:${rank.color};--rank-glow:${rank.glow}">
     <div class="rank-emblem">${rankEmblem(rank, 84)}</div>
     <div class="rank-info">
       <div class="rank-title">${esc(rank.title)}</div>
@@ -57,7 +57,7 @@ export function renderHome(root, app) {
   ${ch ? challengeCard(ch) : ''}
 
   <section class="card today-card">
-    <div class="today-ring" data-go="food">
+    <div class="today-ring" data-go="food" role="button" tabindex="0" aria-label="Open food log">
       ${ring({ value: t.calories, max: p.calorieGoal, size: 148, stroke: 13, children: `<div class="ring-num">${fmt(Math.abs(remaining))}</div><div class="ring-label">${remaining >= 0 ? 'kcal left' : 'kcal over'}</div>` })}
     </div>
     <div class="today-macros">
@@ -94,7 +94,7 @@ export function renderHome(root, app) {
       .join('')}
   </section>
 
-  <section class="card league-mini" data-league style="--league:${lg.color}">
+  <section class="card league-mini" data-league role="button" tabindex="0" aria-label="Open weekly league" style="--league:${lg.color}">
     <div class="league-icon">${lg.icon}</div>
     <div class="grow">
       <div class="league-name">${esc(lg.name)}</div>

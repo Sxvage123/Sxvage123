@@ -362,7 +362,7 @@ function showPredictions(body, app, ctx, preds, thumb, done, retake) {
         ${items
           .map(
             (it, idx) => `
-          <div class="pred ${it.selected ? 'selected' : ''}" data-idx="${idx}">
+          <div class="pred ${it.selected ? 'selected' : ''}" data-idx="${idx}" role="checkbox" tabindex="0" aria-checked="${it.selected}">
             <div class="check">${it.selected ? '✓' : ''}</div>
             <div class="grow">
               <div class="pred-name">${esc(it.label)}</div>

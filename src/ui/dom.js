@@ -48,6 +48,7 @@ export function xpPop(amount) {
   if (!amount) return;
   const el = document.createElement('div');
   el.className = `xp-pop ${amount < 0 ? 'neg' : ''}`;
+  el.setAttribute('aria-hidden', 'true');
   el.textContent = `${amount > 0 ? '+' : ''}${amount} XP`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1600);
@@ -65,6 +66,7 @@ export function sheet(render, { className = '', dismissible = true, full = false
     const el = document.createElement('div');
     el.className = `sheet ${full ? 'sheet-full' : ''} ${className}`;
     el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
     el.innerHTML = '<div class="sheet-grip"></div><div class="sheet-body"></div>';
     backdrop.appendChild(el);
     $('#overlays').appendChild(backdrop);
@@ -144,6 +146,7 @@ export function confirmDialog({ title, message, confirm = 'Confirm', danger = fa
 export function confetti({ count = 140, colors = ['#d4ff3a', '#6fb6ff', '#ff5d7a', '#ffd34d', '#c084fc'] } = {}) {
   const c = document.createElement('canvas');
   c.className = 'confetti';
+  c.setAttribute('aria-hidden', 'true');
   const dpr = window.devicePixelRatio || 1;
   c.width = innerWidth * dpr;
   c.height = innerHeight * dpr;

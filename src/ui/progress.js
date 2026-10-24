@@ -150,7 +150,7 @@ function trendSection(sec, app) {
           y: Math.round(totals[i].calories),
           color: totals[i].calories > p.calorieGoal * 1.1 ? 'var(--danger)' : 'var(--accent)',
         })),
-        { goal: p.calorieGoal },
+        { goal: p.calorieGoal, label: 'Calories over the last 14 days' },
       )}
       <div class="stat-grid">
         <div class="stat"><b>${fmt(avg('calories'))}</b><span>Avg kcal (logged days)</span></div>
@@ -161,11 +161,11 @@ function trendSection(sec, app) {
     </section>
     <section class="card">
       <div class="card-head"><h3>XP · 14 days</h3></div>
-      ${barChart(days.map((d, i) => ({ x: parseDay(d).toLocaleDateString(undefined, { weekday: 'narrow' }), y: xpDays[i], color: 'var(--violet)' })))}
+      ${barChart(days.map((d, i) => ({ x: parseDay(d).toLocaleDateString(undefined, { weekday: 'narrow' }), y: xpDays[i], color: 'var(--violet)' })), { label: 'XP over the last 14 days' })}
     </section>
     <section class="card">
       <div class="card-head"><h3>Weight</h3><button class="btn btn-ghost btn-sm" data-weigh>＋ Log weight</button></div>
-      ${weights.length >= 2 ? lineChart(weights.map((w) => ({ x: shortDay(w.date), y: imp ? kgToLb(w.kg) : w.kg })), { unit: imp ? ' lb' : ' kg', color: 'var(--blue)' }) : '<p class="muted small">Log your weight a few times a week (mornings are best) to see your trend.</p>'}
+      ${weights.length >= 2 ? lineChart(weights.map((w) => ({ x: shortDay(w.date), y: imp ? kgToLb(w.kg) : w.kg })), { unit: imp ? ' lb' : ' kg', color: 'var(--blue)', label: 'Weight trend' }) : '<p class="muted small">Log your weight a few times a week (mornings are best) to see your trend.</p>'}
     </section>
     ${
       photos.length

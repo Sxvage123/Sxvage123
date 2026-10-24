@@ -61,7 +61,7 @@ export function renderScan(root, app) {
   ${
     scans.length >= 2
       ? `<section class="card"><div class="card-head"><h3>Body fat trend</h3><span class="muted small">${scans.length} scans</span></div>
-          ${lineChart(scans.slice(-20).map((s) => ({ x: shortDay(s.date), y: s.bodyFat, lo: s.low, hi: s.high })), { unit: '%', color: 'var(--accent)' })}</section>`
+          ${lineChart(scans.slice(-20).map((s) => ({ x: shortDay(s.date), y: s.bodyFat, lo: s.low, hi: s.high })), { unit: '%', color: 'var(--accent)', label: 'Body fat trend' })}</section>`
       : ''
   }
   ${
