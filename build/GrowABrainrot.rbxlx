@@ -1,0 +1,1732 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="4">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Grow a Brainrot: buy seeds from a rotating shop, plant, wait, harvest mutated fruit, sell.
+-- Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	DoubleSell = 0,
+	SellAnywhere = 0,
+	MoreSpots = 0,
+	FastGrow = 0,
+	LuckyHarvest = 0,
+}
+Config.PassInfo = {
+	{ Key = "DoubleSell", Name = "2x Sell", Price = 249, Description = "Every fruit sells for double" },
+	{ Key = "SellAnywhere", Name = "Sell Anywhere", Price = 99, Description = "Sell from the menu, no walking" },
+	{ Key = "MoreSpots", Name = "+12 Garden Spots", Price = 199, Description = "Plant 12 more seeds at once" },
+	{ Key = "FastGrow", Name = "Fast Grow", Price = 149, Description = "Plants grow 1.5x faster" },
+	{ Key = "LuckyHarvest", Name = "Lucky Harvest", Price = 199, Description = "2x mutation chance" },
+}
+
+Config.Products = {
+	Restock = 0,
+	GrowAll = 0,
+	MythicSeed = 0,
+	Weather = 0,
+	CashPack = 0,
+}
+Config.ProductInfo = {
+	{ Key = "Restock", Name = "Restock Shop", Price = 29, Description = "Instantly restock seeds for the WHOLE server" },
+	{ Key = "GrowAll", Name = "Grow All", Price = 49, Description = "Finish growing every plant in your garden" },
+	{ Key = "MythicSeed", Name = "Mythic Seed Pack", Price = 99, Description = "A random Mythic or Secret seed" },
+	{ Key = "Weather", Name = "Summon Storm", Price = 79, Description = "Start a Brainrot Storm (huge mutations) for everyone" },
+	{ Key = "CashPack", Name = "Cash Crate", Price = 49, Description = "Cash worth 30 min of farming (min $10K)" },
+}
+
+Config.StartingCash = 50
+Config.StartingSeeds = { carrot = 3 }
+Config.BaseSpots = 24
+Config.ExtraSpots = 12
+Config.FruitCap = 300
+Config.RestockEvery = 300
+Config.WeatherEvery = 900
+Config.WeatherDuration = 180
+Config.FastGrowFactor = 1.5
+
+Config.Rarities = {
+	Common = Color3.fromRGB(200, 200, 200),
+	Uncommon = Color3.fromRGB(90, 220, 90),
+	Rare = Color3.fromRGB(60, 140, 255),
+	Legendary = Color3.fromRGB(255, 200, 0),
+	Mythic = Color3.fromRGB(255, 50, 50),
+	Secret = Color3.fromRGB(255, 0, 170),
+}
+
+-- Regrow = seconds until the plant fruits again after harvest (multi-harvest plants), nil = single harvest.
+-- StockChance = probability the seed appears each restock; Stock = max per player per restock.
+Config.Seeds = {
+	{ Id = "carrot", Name = "Noobini Carrot", Rarity = "Common", Price = 10, Grow = 20, Value = 18, Color = Color3.fromRGB(255, 140, 40), StockChance = 1, Stock = 25 },
+	{ Id = "tomato", Name = "Tomatini", Rarity = "Common", Price = 40, Grow = 45, Value = 30, Regrow = 30, Color = Color3.fromRGB(230, 50, 50), StockChance = 1, Stock = 15 },
+	{ Id = "berry", Name = "Lirili Berry", Rarity = "Uncommon", Price = 250, Grow = 60, Value = 70, Regrow = 40, Color = Color3.fromRGB(80, 60, 200), StockChance = 0.8, Stock = 10 },
+	{ Id = "corn", Name = "Tung Tung Corn", Rarity = "Uncommon", Price = 800, Grow = 120, Value = 1_300, Color = Color3.fromRGB(255, 220, 60), StockChance = 0.7, Stock = 8 },
+	{ Id = "melon", Name = "Tralalero Melon", Rarity = "Rare", Price = 3_000, Grow = 180, Value = 400, Regrow = 90, Color = Color3.fromRGB(60, 200, 90), StockChance = 0.5, Stock = 5 },
+	{ Id = "pumpkin", Name = "Patapim Pumpkin", Rarity = "Rare", Price = 9_000, Grow = 300, Value = 15_000, Color = Color3.fromRGB(255, 120, 20), StockChance = 0.4, Stock = 4 },
+	{ Id = "banana", Name = "Chimpanzini Banana", Rarity = "Legendary", Price = 40_000, Grow = 400, Value = 3_500, Regrow = 150, Color = Color3.fromRGB(255, 235, 80), StockChance = 0.25, Stock = 3 },
+	{ Id = "coconut", Name = "Cocofanto Coconut", Rarity = "Legendary", Price = 120_000, Grow = 600, Value = 9_000, Regrow = 240, Color = Color3.fromRGB(130, 90, 50), StockChance = 0.15, Stock = 2 },
+	{ Id = "dragonfruit", Name = "Bombardiro Dragonfruit", Rarity = "Mythic", Price = 600_000, Grow = 900, Value = 40_000, Regrow = 300, Color = Color3.fromRGB(255, 60, 160), StockChance = 0.07, Stock = 1 },
+	{ Id = "mango", Name = "Sahur Mango", Rarity = "Mythic", Price = 2_000_000, Grow = 1_200, Value = 110_000, Regrow = 400, Color = Color3.fromRGB(255, 170, 40), StockChance = 0.04, Stock = 1 },
+	{ Id = "sigma_bean", Name = "Sigma Beanstalk", Rarity = "Secret", Price = 10_000_000, Grow = 1_800, Value = 450_000, Regrow = 600, Color = Color3.fromRGB(30, 255, 200), StockChance = 0.015, Stock = 1 },
+}
+
+-- Mutations multiply fruit value. Chance is per harvest; Weather boosts specific ones.
+Config.Mutations = {
+	{ Id = "Gold", Mult = 20, Chance = 0.01, Color = Color3.fromRGB(255, 215, 0) },
+	{ Id = "Rainbow", Mult = 50, Chance = 0.001, Color = Color3.fromRGB(255, 80, 255) },
+	{ Id = "Wet", Mult = 2, Chance = 0, Color = Color3.fromRGB(80, 160, 255) },
+	{ Id = "Shocked", Mult = 100, Chance = 0, Color = Color3.fromRGB(255, 255, 120) },
+	{ Id = "Brainrotted", Mult = 30, Chance = 0, Color = Color3.fromRGB(180, 0, 255) },
+}
+
+Config.Weathers = {
+	Rain = { Name = "Rain", Boosts = { Wet = 0.5 } },
+	Thunder = { Name = "Thunderstorm", Boosts = { Wet = 0.5, Shocked = 0.01 } },
+	Brainrot = { Name = "BRAINROT STORM", Boosts = { Brainrotted = 0.15, Rainbow = 0.01, Gold = 0.05 } },
+}
+
+Config.SeedById = {}
+for _, seed in Config.Seeds do
+	Config.SeedById[seed.Id] = seed
+end
+Config.MutationById = {}
+for _, m in Config.Mutations do
+	Config.MutationById[m.Id] = m
+end
+
+-- Fruit weight (kg) scales value; rolled per harvest.
+function Config.FruitValue(fruit): number
+	local seed = Config.SeedById[fruit.S]
+	if not seed then
+		return 0
+	end
+	local mult = 1
+	if fruit.M then
+		local m = Config.MutationById[fruit.M]
+		mult = m and m.Mult or 1
+	end
+	return math.floor(seed.Value * mult * (fruit.W or 1))
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="6">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="7">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="10">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="Script" referent="11">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Grow a Brainrot server: gardens, rotating seed shop, harvesting, mutations, weather, selling.
+local CollectionService = game:GetService("CollectionService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local SeedsRemote = remote("RemoteEvent", "Seeds")
+local SelectSeedRemote = remote("RemoteEvent", "SelectSeed")
+local GetShopRemote = remote("RemoteFunction", "GetShop")
+local BuySeedRemote = remote("RemoteFunction", "BuySeed")
+local SellRemote = remote("RemoteFunction", "SellAll")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+---------------------------------------------------------------- world
+
+local world = Instance.new("Folder")
+world.Name = "World"
+world.Parent = workspace
+
+local function part(props, parent: Instance?): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	p.Parent = parent or world
+	return p
+end
+
+local function billboard(adornee: BasePart, text: string, color: Color3, offset: number): TextLabel
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(200, 50)
+	gui.StudsOffset = Vector3.new(0, offset, 0)
+	gui.MaxDistance = 60
+	gui.Parent = adornee
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.Text = text
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2.5
+	stroke.Parent = label
+	label.Parent = gui
+	return label
+end
+
+Lighting.ClockTime = 13
+Lighting.Brightness = 2.5
+part({ Name = "Ground", Size = Vector3.new(500, 2, 400), Position = Vector3.new(0, -1, 0), Color = Color3.fromRGB(100, 200, 90), Material = Enum.Material.Grass })
+part({ Name = "Path", Size = Vector3.new(400, 0.2, 24), Position = Vector3.new(0, 0.1, 0), Color = Color3.fromRGB(210, 180, 130), Material = Enum.Material.Sand })
+
+local function stand(name: string, position: Vector3, color: Color3, actionText: string): (BasePart, ProximityPrompt)
+	local counter = part({ Name = name, Size = Vector3.new(14, 4, 6), Position = position + Vector3.new(0, 2, 0), Color = color, Material = Enum.Material.WoodPlanks })
+	part({ Name = "Roof", Size = Vector3.new(16, 1, 10), Position = position + Vector3.new(0, 10, 0), Color = color:Lerp(Color3.new(1, 1, 1), 0.3) })
+	for _, x in { -6.5, 6.5 } do
+		part({ Size = Vector3.new(1, 8, 1), Position = position + Vector3.new(x, 5, 0), Color = Color3.fromRGB(120, 80, 40) })
+	end
+	billboard(counter, name, Color3.new(1, 1, 1), 10)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = actionText
+	prompt.ObjectText = name
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = counter
+	return counter, prompt
+end
+local seedStand, seedPrompt = stand("Seed Shop", Vector3.new(-25, 0, 0), Color3.fromRGB(80, 170, 60), "Open Shop")
+local sellStand, sellPrompt = stand("Sell Stand", Vector3.new(25, 0, 0), Color3.fromRGB(230, 170, 40), "Sell All Fruit")
+seedPrompt.Name = "SeedShopPrompt"
+
+local spawn = Instance.new("SpawnLocation")
+spawn.Anchored = true
+spawn.Size = Vector3.new(10, 1, 10)
+spawn.Position = Vector3.new(0, 0.5, 0)
+spawn.Transparency = 1
+spawn.CanCollide = false
+spawn.Neutral = true
+spawn.Parent = world
+
+local TOTAL_SPOTS = Config.BaseSpots + Config.ExtraSpots
+local plots = {}
+do
+	local i = 0
+	for _, z in { 75, -75 } do
+		for _, x in { -100, 0, 100 } do
+			i += 1
+			local cf = CFrame.lookAt(Vector3.new(x, 0, z), Vector3.new(x, 0, 0))
+			local model = Instance.new("Model")
+			model.Name = "Garden" .. i
+			model.Parent = world
+			part({ Name = "Grass", Size = Vector3.new(72, 1, 58), CFrame = cf * CFrame.new(0, 0.5, 0), Color = Color3.fromRGB(80, 170, 70), Material = Enum.Material.Grass }, model)
+			for _, sx in { -1, 1 } do
+				part({ Name = "Fence", Size = Vector3.new(1, 3, 58), CFrame = cf * CFrame.new(sx * 36, 2, 0), Color = Color3.fromRGB(240, 240, 240) }, model)
+			end
+			part({ Name = "Fence", Size = Vector3.new(72, 3, 1), CFrame = cf * CFrame.new(0, 2, 29), Color = Color3.fromRGB(240, 240, 240) }, model)
+			local signPart = part({ Name = "Sign", Size = Vector3.new(16, 4, 1), CFrame = cf * CFrame.new(0, 4, -31), Color = Color3.fromRGB(150, 100, 50) }, model)
+			local signLabel = billboard(signPart, "Empty Garden", Color3.new(1, 1, 1), 4)
+
+			local spots = {}
+			for index = 1, TOTAL_SPOTS do
+				local row = math.floor((index - 1) / 6)
+				local col = (index - 1) % 6
+				local spotCF = cf * CFrame.new((col - 2.5) * 10, 1.1, -20 + row * 8)
+				local soil = part({
+					Name = "Spot" .. index,
+					Size = Vector3.new(7, 0.4, 6),
+					CFrame = spotCF,
+					Color = if index > Config.BaseSpots then Color3.fromRGB(150, 110, 40) else Color3.fromRGB(110, 70, 40),
+					Material = Enum.Material.Ground,
+				}, model)
+				soil:SetAttribute("Spot", index)
+				CollectionService:AddTag(soil, "Soil")
+				soil:SetAttribute("Locked", index > Config.BaseSpots)
+				local function prompt(name, action, key, hold)
+					local p = Instance.new("ProximityPrompt")
+					p.Name = name
+					p.ActionText = action
+					p.KeyboardKeyCode = key
+					p.HoldDuration = hold
+					p.MaxActivationDistance = 9
+					p.RequiresLineOfSight = false
+					p.Parent = soil
+					return p
+				end
+				spots[index] = {
+					Soil = soil,
+					PlantPrompt = prompt("PlantPrompt", "Plant", Enum.KeyCode.E, 0),
+					HarvestPrompt = prompt("HarvestPrompt", "Harvest", Enum.KeyCode.E, 0),
+					ShovelPrompt = prompt("ShovelPrompt", "Dig Up", Enum.KeyCode.X, 1.5),
+					Label = billboard(soil, "", Color3.new(1, 1, 1), 6),
+					Visual = nil,
+				}
+			end
+			table.insert(plots, { Index = i, CFrame = cf, Spots = spots, SignLabel = signLabel, Owner = nil, SpawnCFrame = cf * CFrame.new(0, 4, -26) })
+		end
+	end
+end
+
+---------------------------------------------------------------- shop stock
+
+local stock: { [string]: number } = {}
+local rotation = 0
+-- Saved per player so stock limits reset each rotation; includes JobId so another server's
+-- rotation 1 is never confused with this one.
+local rotationKey = ""
+
+local function restock()
+	rotation += 1
+	rotationKey = game.JobId .. ":" .. rotation
+	table.clear(stock)
+	for _, seed in Config.Seeds do
+		if math.random() <= seed.StockChance then
+			stock[seed.Id] = math.random(math.max(1, math.ceil(seed.Stock / 2)), seed.Stock)
+		end
+	end
+	workspace:SetAttribute("Rotation", rotation)
+	workspace:SetAttribute("NextRestock", os.time() + Config.RestockEvery)
+	for id, count in stock do
+		local seed = Config.SeedById[id]
+		if seed.Rarity == "Mythic" or seed.Rarity == "Secret" then
+			notify(nil, seed.Name .. " x" .. count .. " is in the Seed Shop!", Config.Rarities[seed.Rarity])
+		end
+	end
+end
+restock()
+
+local function remaining(data, seedId: string): number
+	local bought = if data.Bought.R == rotationKey then (data.Bought.C[seedId] or 0) else 0
+	return math.max(0, (stock[seedId] or 0) - bought)
+end
+
+---------------------------------------------------------------- player helpers
+
+local playerPlot: { [Player]: any } = {}
+
+local function sendSeeds(player: Player)
+	local data = DataService.Get(player)
+	if data then
+		SeedsRemote:FireClient(player, data.Seeds)
+	end
+end
+
+local function syncStats(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local total = 0
+	for _, fruit in data.Fruits do
+		total += Config.FruitValue(fruit)
+	end
+	if MonetizationService.OwnsPass(player, "DoubleSell") then
+		total *= 2
+	end
+	player:SetAttribute("Cash", data.Cash)
+	player:SetAttribute("FruitCount", #data.Fruits)
+	player:SetAttribute("FruitValue", total)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Cash.Value = Format.Cash(data.Cash)
+	end
+end
+
+local function spotLimit(player: Player): number
+	return Config.BaseSpots + (if MonetizationService.OwnsPass(player, "MoreSpots") then Config.ExtraSpots else 0)
+end
+
+---------------------------------------------------------------- plants
+
+local function clearVisual(spot)
+	if spot.Visual then
+		spot.Visual:Destroy()
+		spot.Visual = nil
+	end
+end
+
+local function renderSpot(plot, index: number, plant)
+	local spot = plot.Spots[index]
+	local soil = spot.Soil
+	if not plant then
+		clearVisual(spot)
+		spot.Label.Text = ""
+		soil:SetAttribute("State", "Empty")
+		return
+	end
+	local seed = Config.SeedById[plant.S]
+	local now = os.time()
+	local progress = math.clamp((now - plant.T) / plant.G, 0, 1)
+	local ready = progress >= 1
+	soil:SetAttribute("State", if ready then "Ready" else "Growing")
+
+	if not spot.Visual then
+		local model = Instance.new("Model")
+		model.Name = "Plant"
+		local stem = part({ Name = "Stem", Size = Vector3.new(0.6, 1, 0.6), Color = Color3.fromRGB(60, 160, 50), CanCollide = false, CanQuery = false }, model)
+		local fruit = part({ Name = "Fruit", Shape = Enum.PartType.Ball, Size = Vector3.one * 2, Color = seed.Color, CanCollide = false, CanQuery = false, Transparency = 1 }, model)
+		model.Parent = soil
+		spot.Visual = model
+		spot.Stem = stem
+		spot.Fruit = fruit
+	end
+	local height = 0.5 + progress * 3.5
+	spot.Stem.Size = Vector3.new(0.6, height, 0.6)
+	spot.Stem.CFrame = soil.CFrame * CFrame.new(0, 0.2 + height / 2, 0)
+	local fruitSize = 0.6 + progress * 1.6
+	spot.Fruit.Size = Vector3.one * fruitSize
+	spot.Fruit.CFrame = soil.CFrame * CFrame.new(0, 0.2 + height + fruitSize / 2 - 0.2, 0)
+	spot.Fruit.Transparency = if progress > 0.3 then 0 else 1
+	spot.Fruit.Material = if ready then Enum.Material.Neon else Enum.Material.SmoothPlastic
+
+	if ready then
+		spot.Label.Text = seed.Name .. "\nREADY!"
+		spot.Label.TextColor3 = Color3.fromRGB(120, 255, 120)
+	else
+		spot.Label.Text = seed.Name .. "\n" .. Format.Time(plant.T + plant.G - now)
+		spot.Label.TextColor3 = Config.Rarities[seed.Rarity]
+	end
+end
+
+local function renderPlot(player: Player)
+	local plot = playerPlot[player]
+	local data = DataService.Get(player)
+	if not plot or not data then
+		return
+	end
+	local limit = spotLimit(player)
+	for index, spot in plot.Spots do
+		spot.Soil:SetAttribute("Locked", index > limit)
+		renderSpot(plot, index, data.Plants[tostring(index)])
+	end
+end
+
+local function growTime(player: Player, seconds: number): number
+	if MonetizationService.OwnsPass(player, "FastGrow") then
+		return math.ceil(seconds / Config.FastGrowFactor)
+	end
+	return seconds
+end
+
+local function rollMutation(player: Player): string?
+	local luck = if MonetizationService.OwnsPass(player, "LuckyHarvest") then 2 else 1
+	local weather = Config.Weathers[workspace:GetAttribute("Weather") or ""]
+	local active = weather and (workspace:GetAttribute("WeatherUntil") or 0) > os.time()
+	-- Rarest first so the best mutation wins.
+	local order = { "Shocked", "Rainbow", "Brainrotted", "Gold", "Wet" }
+	for _, id in order do
+		local m = Config.MutationById[id]
+		local chance = m.Chance
+		if active and weather.Boosts[id] then
+			chance += weather.Boosts[id]
+		end
+		if math.random() < chance * luck then
+			return id
+		end
+	end
+	return nil
+end
+
+local function rollWeight(): number
+	local w = 0.7 + math.random() * 0.8
+	if math.random() < 0.03 then
+		w *= 3 -- huge fruit!
+	end
+	return math.floor(w * 100) / 100
+end
+
+for _, plot in plots do
+	for index, spot in plot.Spots do
+		spot.PlantPrompt.Triggered:Connect(function(player)
+			if plot.Owner ~= player then
+				return
+			end
+			local data = DataService.Get(player)
+			local key = tostring(index)
+			if not data or data.Plants[key] then
+				return
+			end
+			if index > spotLimit(player) then
+				notify(player, "Unlock this spot with +12 Garden Spots!", Color3.fromRGB(255, 200, 0))
+				return
+			end
+			local seedId = player:GetAttribute("SelectedSeed")
+			if not seedId or (data.Seeds[seedId] or 0) <= 0 then
+				notify(player, "Pick a seed from your hotbar first! Buy seeds at the Seed Shop.", Color3.fromRGB(255, 90, 90))
+				return
+			end
+			local seed = Config.SeedById[seedId]
+			data.Seeds[seedId] -= 1
+			if data.Seeds[seedId] <= 0 then
+				data.Seeds[seedId] = nil
+			end
+			data.Plants[key] = { S = seedId, T = os.time(), G = growTime(player, seed.Grow), H = 0 }
+			renderSpot(plot, index, data.Plants[key])
+			sendSeeds(player)
+		end)
+
+		spot.HarvestPrompt.Triggered:Connect(function(player)
+			if plot.Owner ~= player then
+				return
+			end
+			local data = DataService.Get(player)
+			local key = tostring(index)
+			local plant = data and data.Plants[key]
+			if not plant or os.time() < plant.T + plant.G then
+				return
+			end
+			if #data.Fruits >= Config.FruitCap then
+				notify(player, "Your basket is full! Go sell your fruit.", Color3.fromRGB(255, 90, 90))
+				return
+			end
+			local seed = Config.SeedById[plant.S]
+			local fruit = { S = plant.S, M = rollMutation(player), W = rollWeight() }
+			table.insert(data.Fruits, fruit)
+			data.Harvests += 1
+			if fruit.M then
+				local m = Config.MutationById[fruit.M]
+				local message = fruit.M .. " " .. seed.Name .. "! (" .. Format.Cash(Config.FruitValue(fruit)) .. ")"
+				notify(player, message, m.Color)
+				if m.Mult >= 30 then
+					notify(nil, player.DisplayName .. " harvested a " .. message, m.Color)
+				end
+			end
+			if seed.Regrow then
+				plant.T = os.time()
+				plant.G = growTime(player, seed.Regrow)
+				plant.H += 1
+			else
+				data.Plants[key] = nil
+			end
+			renderSpot(plot, index, data.Plants[key])
+			syncStats(player)
+		end)
+
+		spot.ShovelPrompt.Triggered:Connect(function(player)
+			if plot.Owner ~= player then
+				return
+			end
+			local data = DataService.Get(player)
+			if data and data.Plants[tostring(index)] then
+				data.Plants[tostring(index)] = nil
+				renderSpot(plot, index, nil)
+			end
+		end)
+	end
+end
+
+---------------------------------------------------------------- shop + selling
+
+GetShopRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data then
+		return {}
+	end
+	local result = {}
+	for id in stock do
+		result[id] = remaining(data, id)
+	end
+	return result
+end
+
+BuySeedRemote.OnServerInvoke = function(player, seedId)
+	local data = DataService.Get(player)
+	local seed = type(seedId) == "string" and Config.SeedById[seedId]
+	if not data or not seed then
+		return false, "Invalid seed"
+	end
+	if (seedStand.Position - (player.Character and player.Character:GetPivot().Position or Vector3.zero)).Magnitude > 30 then
+		return false, "Walk to the Seed Shop!"
+	end
+	if remaining(data, seedId) <= 0 then
+		return false, "Out of stock! Restock in " .. Format.Time((workspace:GetAttribute("NextRestock") or 0) - os.time())
+	end
+	if data.Cash < seed.Price then
+		return false, "Need " .. Format.Cash(seed.Price) .. "!"
+	end
+	if data.Bought.R ~= rotationKey then
+		data.Bought = { R = rotationKey, C = {} }
+	end
+	data.Bought.C[seedId] = (data.Bought.C[seedId] or 0) + 1
+	data.Cash -= seed.Price
+	data.Seeds[seedId] = (data.Seeds[seedId] or 0) + 1
+	if not player:GetAttribute("SelectedSeed") then
+		player:SetAttribute("SelectedSeed", seedId)
+	end
+	syncStats(player)
+	sendSeeds(player)
+	return true, "Bought " .. seed.Name .. "!"
+end
+
+local function sellAll(player: Player): (boolean, string)
+	local data = DataService.Get(player)
+	if not data or #data.Fruits == 0 then
+		return false, "No fruit to sell! Harvest your plants first."
+	end
+	local total = 0
+	for _, fruit in data.Fruits do
+		total += Config.FruitValue(fruit)
+	end
+	if MonetizationService.OwnsPass(player, "DoubleSell") then
+		total *= 2
+	end
+	table.clear(data.Fruits)
+	data.Cash += total
+	data.TotalEarned += total
+	syncStats(player)
+	return true, "Sold for " .. Format.Cash(total) .. "!"
+end
+
+sellPrompt.Triggered:Connect(function(player)
+	local ok, message = sellAll(player)
+	notify(player, message, if ok then Color3.fromRGB(90, 255, 90) else Color3.fromRGB(255, 90, 90))
+end)
+
+SellRemote.OnServerInvoke = function(player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local near = root and (root.Position - sellStand.Position).Magnitude < 25
+	if not near and not MonetizationService.OwnsPass(player, "SellAnywhere") then
+		return false, "NeedPass"
+	end
+	return sellAll(player)
+end
+
+SelectSeedRemote.OnServerEvent:Connect(function(player, seedId)
+	if type(seedId) == "string" and Config.SeedById[seedId] then
+		player:SetAttribute("SelectedSeed", seedId)
+	end
+end)
+
+---------------------------------------------------------------- weather
+
+local function startWeather(key: string)
+	workspace:SetAttribute("Weather", key)
+	workspace:SetAttribute("WeatherUntil", os.time() + Config.WeatherDuration)
+	notify(nil, Config.Weathers[key].Name .. " started! Harvest now for mutations!", Color3.fromRGB(150, 200, 255))
+end
+
+task.spawn(function()
+	while true do
+		task.wait(Config.WeatherEvery)
+		local roll = math.random()
+		startWeather(if roll < 0.6 then "Rain" elseif roll < 0.9 then "Thunder" else "Brainrot")
+	end
+end)
+
+task.spawn(function()
+	while true do
+		local now = os.time()
+		if now >= (workspace:GetAttribute("NextRestock") or 0) then
+			restock()
+			notify(nil, "Seed Shop restocked!", Color3.fromRGB(120, 255, 120))
+		end
+		local active = (workspace:GetAttribute("WeatherUntil") or 0) > now
+		local weather = workspace:GetAttribute("Weather")
+		Lighting.ClockTime = if active then 18.2 else 13
+		Lighting.Ambient = if active and weather == "Brainrot" then Color3.fromRGB(120, 0, 160) else Color3.fromRGB(70, 70, 70)
+		for player in playerPlot do
+			renderPlot(player)
+			local data = DataService.Get(player)
+			if data then
+				data.PlaySeconds += 1
+			end
+		end
+		task.wait(1)
+	end
+end)
+
+---------------------------------------------------------------- players
+
+local function claimPlot(player: Player)
+	for _, plot in plots do
+		if not plot.Owner then
+			plot.Owner = player
+			plot.SignLabel.Text = player.DisplayName .. "'s Garden"
+			playerPlot[player] = plot
+			for _, spot in plot.Spots do
+				spot.Soil:SetAttribute("OwnerId", player.UserId)
+			end
+			return plot
+		end
+	end
+	return nil
+end
+
+local function releasePlot(player: Player)
+	local plot = playerPlot[player]
+	if not plot then
+		return
+	end
+	playerPlot[player] = nil
+	plot.Owner = nil
+	plot.SignLabel.Text = "Empty Garden"
+	for index, spot in plot.Spots do
+		spot.Soil:SetAttribute("OwnerId", 0)
+		renderSpot(plot, index, nil)
+	end
+end
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local cash = Instance.new("StringValue")
+	cash.Name = "Cash"
+	cash.Parent = stats
+	stats.Parent = player
+	if data.LoginCount == 1 then
+		for id, count in Config.StartingSeeds do
+			data.Seeds[id] = (data.Seeds[id] or 0) + count
+		end
+	end
+	for key, plant in data.Plants do
+		if not Config.SeedById[plant.S] then
+			data.Plants[key] = nil
+		end
+	end
+	local plot = claimPlot(player)
+	if not plot then
+		notify(player, "All gardens are taken! Try another server.", Color3.fromRGB(255, 90, 90))
+	end
+	local first = next(data.Seeds)
+	if first then
+		player:SetAttribute("SelectedSeed", first)
+	end
+	syncStats(player)
+	sendSeeds(player)
+	renderPlot(player)
+	local function onCharacter(character: Model)
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait()
+		if playerPlot[player] then
+			character:PivotTo(playerPlot[player].SpawnCFrame)
+		end
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	task.defer(releasePlot, player)
+end)
+
+---------------------------------------------------------------- monetization
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		Restock = function(player)
+			restock()
+			notify(nil, player.DisplayName .. " RESTOCKED the Seed Shop for everyone!", Color3.fromRGB(120, 255, 120))
+			return true
+		end,
+		GrowAll = function(player, data)
+			local now = os.time()
+			for _, plant in data.Plants do
+				plant.T = now - plant.G
+			end
+			renderPlot(player)
+			notify(player, "Everything grew instantly!", Color3.fromRGB(120, 255, 120))
+			return true
+		end,
+		MythicSeed = function(player, data)
+			local pool = {}
+			for _, seed in Config.Seeds do
+				if seed.Rarity == "Mythic" then
+					table.insert(pool, seed.Id)
+				end
+			end
+			local id = if math.random() < 0.1 then "sigma_bean" else pool[math.random(1, #pool)]
+			data.Seeds[id] = (data.Seeds[id] or 0) + 1
+			sendSeeds(player)
+			notify(player, "You got a " .. Config.SeedById[id].Name .. " seed!", Config.Rarities[Config.SeedById[id].Rarity])
+			return true
+		end,
+		Weather = function(player)
+			startWeather("Brainrot")
+			notify(nil, player.DisplayName .. " summoned a BRAINROT STORM!", Color3.fromRGB(180, 0, 255))
+			return true
+		end,
+		CashPack = function(player, data)
+			local rate = if data.PlaySeconds > 60 then data.TotalEarned / data.PlaySeconds else 0
+			local amount = math.max(10_000, math.floor(rate * 1800))
+			data.Cash += amount
+			syncStats(player)
+			notify(player, "+" .. Format.Cash(amount) .. "!", Color3.fromRGB(90, 255, 90))
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		renderPlot(player)
+		syncStats(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+DataService.Init("GrowABrainrot_v1", {
+	Cash = Config.StartingCash,
+	Seeds = {},
+	Plants = {},
+	Fruits = {},
+	Bought = { R = "", C = {} },
+	TotalEarned = 0,
+	Harvests = 0,
+	PlaySeconds = 0,
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="12">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="13">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="14">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="15">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Grow a Brainrot client: HUD, seed hotbar, seed shop, selling, Robux shop, weather FX.
+local CollectionService = game:GetService("CollectionService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+
+local function buy(kind: string, key: string)
+	local id = if kind == "Pass" then Config.Passes[key] else Config.Products[key]
+	if id > 0 then
+		if kind == "Pass" then
+			MarketplaceService:PromptGamePassPurchase(player, id)
+		else
+			MarketplaceService:PromptProductPurchase(player, id)
+		end
+	elseif RunService:IsStudio() then
+		testPurchase:FireServer(kind, key)
+		toast("[Studio test] " .. key, Color3.fromRGB(255, 215, 0))
+	else
+		toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+	end
+end
+
+---------------------------------------------------------------- HUD
+
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(360, 80),
+	BackgroundColor3 = Color3.fromRGB(40, 70, 30),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local cashLabel = UI.Label("$0", { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 2), TextColor3 = Color3.fromRGB(120, 255, 120), Parent = top })
+local fruitLabel = UI.Label("", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.fromOffset(5, 48), Parent = top })
+local banner = UI.Label("", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 92), Size = UDim2.fromOffset(560, 30), TextColor3 = Color3.fromRGB(160, 210, 255), Parent = gui })
+
+local function refresh()
+	cashLabel.Text = Format.Cash(player:GetAttribute("Cash") or 0)
+	fruitLabel.Text = string.format(
+		"🧺 %d/%d fruit  •  worth %s",
+		player:GetAttribute("FruitCount") or 0,
+		Config.FruitCap,
+		Format.Cash(player:GetAttribute("FruitValue") or 0)
+	)
+end
+player.AttributeChanged:Connect(refresh)
+refresh()
+
+---------------------------------------------------------------- seed hotbar
+
+local hotbar = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -12),
+	Size = UDim2.new(0.9, 0, 0, 84),
+	BackgroundTransparency = 1,
+	Parent = gui,
+})
+local hotLayout = Instance.new("UIListLayout")
+hotLayout.FillDirection = Enum.FillDirection.Horizontal
+hotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+hotLayout.Padding = UDim.new(0, 6)
+hotLayout.SortOrder = Enum.SortOrder.LayoutOrder
+hotLayout.Parent = hotbar
+
+local seeds = {}
+local function renderHotbar()
+	for _, c in hotbar:GetChildren() do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local selected = player:GetAttribute("SelectedSeed")
+	for i, seed in Config.Seeds do
+		local count = seeds[seed.Id]
+		if not count or count <= 0 then
+			continue
+		end
+		local b = UI.new("TextButton", {
+			Text = "",
+			LayoutOrder = i,
+			Size = UDim2.fromOffset(84, 84),
+			BackgroundColor3 = Color3.fromRGB(40, 40, 50),
+			Parent = hotbar,
+		}, { UI.Corner(12), UI.Stroke(if selected == seed.Id then Color3.fromRGB(120, 255, 120) else Config.Rarities[seed.Rarity], if selected == seed.Id then 4 else 2) }) :: TextButton
+		UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(32, 32), BackgroundColor3 = seed.Color, Parent = b }, { UI.Corner(16) })
+		UI.Label(seed.Name, { Position = UDim2.fromOffset(3, 40), Size = UDim2.new(1, -6, 0, 22), Parent = b })
+		UI.Label("x" .. count, { Position = UDim2.fromOffset(3, 62), Size = UDim2.new(1, -6, 0, 18), TextColor3 = Color3.fromRGB(255, 230, 120), Parent = b })
+		b.Activated:Connect(function()
+			remotes.SelectSeed:FireServer(seed.Id)
+		end)
+	end
+end
+remotes:WaitForChild("Seeds").OnClientEvent:Connect(function(s)
+	seeds = s
+	renderHotbar()
+end)
+player:GetAttributeChangedSignal("SelectedSeed"):Connect(renderHotbar)
+
+---------------------------------------------------------------- modals
+
+local modals = {}
+local function modal(title: string): (Frame, ScrollingFrame)
+	local frame = UI.new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.48),
+		Size = UDim2.new(0, 540, 0.68, 0),
+		BackgroundColor3 = Color3.fromRGB(50, 70, 40),
+		Visible = false,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 560)
+	c.Parent = frame
+	UI.Label(title, { Name = "Title", Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame }).Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		Parent = frame,
+	}) :: ScrollingFrame
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
+	table.insert(modals, frame)
+	return frame, list
+end
+local function open(frame: Frame)
+	for _, m in modals do
+		if m ~= frame then
+			m.Visible = false
+		end
+	end
+	frame.Visible = not frame.Visible
+end
+
+local function row(parent: Instance, order: number, name: string, desc: string, color: Color3): (Frame, TextButton)
+	local r = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = Color3.fromRGB(70, 95, 55), LayoutOrder = order, Parent = parent }, { UI.Corner(12) }) :: Frame
+	UI.Label(name, { Name = "Name", Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = r })
+	UI.Label(desc, { Name = "Desc", Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(220, 230, 210), Parent = r })
+	local b = UI.Button("", color, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 52), Parent = r })
+	return r, b
+end
+
+-- Seed shop
+local seedShop, seedList = modal("SEED SHOP")
+local seedRows = {}
+do
+	local restockRow, restockButton = row(seedList, 0, "Restock in 5:00", "Restock the shop for the whole server", Color3.fromRGB(40, 140, 230))
+	restockButton.Text = "R$ " .. Config.ProductInfo[1].Price
+	restockButton.Activated:Connect(function()
+		buy("Product", "Restock")
+	end)
+	seedRows.Restock = restockRow
+	for i, seed in Config.Seeds do
+		local r, b = row(seedList, i, seed.Name, seed.Rarity .. "  •  sells ~" .. Format.Cash(seed.Value) .. (if seed.Regrow then "  •  regrows" else ""), Color3.fromRGB(40, 180, 70))
+		local nameLabel = r:FindFirstChild("Name") :: TextLabel
+		nameLabel.TextColor3 = Config.Rarities[seed.Rarity]
+		b.Text = Format.Cash(seed.Price)
+		b.Activated:Connect(function()
+			local ok, msg = remotes.BuySeed:InvokeServer(seed.Id)
+			toast(msg, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
+			if ok then
+				task.spawn(function()
+					local stock = remotes.GetShop:InvokeServer()
+					for id, rr in seedRows do
+						if id ~= "Restock" then
+							rr.Stock(stock[id] or 0)
+						end
+					end
+				end)
+			end
+		end)
+		seedRows[seed.Id] = {
+			Stock = function(n: number)
+				b.Text = if n > 0 then Format.Cash(seed.Price) .. " (x" .. n .. ")" else "NO STOCK"
+				b.BackgroundColor3 = if n > 0 then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(90, 90, 90)
+			end,
+		}
+	end
+end
+local function refreshShop()
+	local stock = remotes.GetShop:InvokeServer()
+	for id, r in seedRows do
+		if id ~= "Restock" then
+			r.Stock(stock[id] or 0)
+		end
+	end
+end
+workspace:GetAttributeChangedSignal("Rotation"):Connect(function()
+	if seedShop.Visible then
+		refreshShop()
+	end
+end)
+local function openSeedShop()
+	open(seedShop)
+	if seedShop.Visible then
+		refreshShop()
+	end
+end
+ProximityPromptService.PromptTriggered:Connect(function(prompt)
+	if prompt.Name == "SeedShopPrompt" then
+		openSeedShop()
+	end
+end)
+
+-- Robux shop
+local shop, shopList = modal("SHOP")
+do
+	local order = 0
+	for _, info in Config.ProductInfo do
+		order += 1
+		local _, b = row(shopList, order, info.Name, info.Description, Color3.fromRGB(40, 140, 230))
+		b.Text = "R$ " .. info.Price
+		b.Activated:Connect(function()
+			buy("Product", info.Key)
+		end)
+	end
+	for _, info in Config.PassInfo do
+		order += 1
+		local _, b = row(shopList, order, info.Name, info.Description, Color3.fromRGB(40, 180, 70))
+		b.Text = "R$ " .. info.Price
+		local function owned()
+			if player:GetAttribute("Pass_" .. info.Key) then
+				b.Text = "OWNED"
+				b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+			end
+		end
+		player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+		owned()
+		b.Activated:Connect(function()
+			if not player:GetAttribute("Pass_" .. info.Key) then
+				buy("Pass", info.Key)
+			end
+		end)
+	end
+end
+
+-- Side buttons
+local side = UI.new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.45, 0), Size = UDim2.fromOffset(130, 260), BackgroundTransparency = 1, Parent = gui })
+local sideLayout = Instance.new("UIListLayout")
+sideLayout.Padding = UDim.new(0, 10)
+sideLayout.Parent = side
+UI.Button("SEEDS", Color3.fromRGB(80, 170, 60), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(openSeedShop)
+UI.Button("SELL", Color3.fromRGB(230, 170, 40), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	local ok, msg = remotes.SellAll:InvokeServer()
+	if msg == "NeedPass" then
+		toast("Walk to the Sell Stand, or get Sell Anywhere!", Color3.fromRGB(255, 200, 0))
+		buy("Pass", "SellAnywhere")
+		return
+	end
+	toast(msg, if ok then Color3.fromRGB(120, 255, 120) else Color3.fromRGB(255, 90, 90))
+end)
+UI.Button("SHOP", Color3.fromRGB(40, 140, 230), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	open(shop)
+end)
+UI.Button("GROW ALL", Color3.fromRGB(200, 60, 255), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	buy("Product", "GrowAll")
+end)
+
+---------------------------------------------------------------- prompts, banner, weather FX
+
+local rainPart = Instance.new("Part")
+rainPart.Anchored = true
+rainPart.CanCollide = false
+rainPart.CanQuery = false
+rainPart.CanTouch = false
+rainPart.Transparency = 1
+rainPart.Size = Vector3.new(120, 1, 120)
+rainPart.Parent = workspace
+local rain = Instance.new("ParticleEmitter")
+rain.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+rain.Rate = 0
+rain.Lifetime = NumberRange.new(1.5)
+rain.Speed = NumberRange.new(60)
+rain.EmissionDirection = Enum.NormalId.Bottom
+rain.Size = NumberSequence.new(0.3)
+rain.Parent = rainPart
+
+RunService.RenderStepped:Connect(function()
+	local cam = workspace.CurrentCamera
+	if cam then
+		rainPart.CFrame = CFrame.new(cam.CFrame.Position + Vector3.new(0, 50, 0))
+	end
+end)
+
+task.spawn(function()
+	while true do
+		local now = os.time()
+		local nextRestock = workspace:GetAttribute("NextRestock") or now
+		local weather = workspace:GetAttribute("Weather")
+		local active = (workspace:GetAttribute("WeatherUntil") or 0) > now and weather
+		local parts = { "Restock " .. Format.Time(nextRestock - now) }
+		if active then
+			table.insert(parts, 1, Config.Weathers[weather].Name .. " " .. Format.Time(workspace:GetAttribute("WeatherUntil") - now))
+		end
+		banner.Text = table.concat(parts, "   •   ")
+		local restockLabel = (seedRows.Restock :: Frame):FindFirstChild("Name") :: TextLabel
+		restockLabel.Text = "Restock in " .. Format.Time(nextRestock - now)
+		rain.Rate = if active then 400 else 0
+		rain.Color = ColorSequence.new(if weather == "Brainrot" then Color3.fromRGB(200, 80, 255) else Color3.fromRGB(150, 190, 255))
+
+		for _, soil in CollectionService:GetTagged("Soil") do
+			local mine = soil:GetAttribute("OwnerId") == player.UserId
+			local state = soil:GetAttribute("State") or "Empty"
+			local plant = soil:FindFirstChild("PlantPrompt") :: ProximityPrompt?
+			local harvest = soil:FindFirstChild("HarvestPrompt") :: ProximityPrompt?
+			local shovel = soil:FindFirstChild("ShovelPrompt") :: ProximityPrompt?
+			if plant then
+				plant.Enabled = mine and state == "Empty"
+				plant.ObjectText = if soil:GetAttribute("Locked") then "🔒 Locked" else ""
+			end
+			if harvest then
+				harvest.Enabled = mine and state == "Ready"
+			end
+			if shovel then
+				shovel.Enabled = mine and state ~= "Empty"
+			end
+		end
+		task.wait(0.3)
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
