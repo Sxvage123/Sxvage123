@@ -1,0 +1,34 @@
+{
+  "name": "BrainrotHideAndSeek",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Common": {
+        "$path": "../../shared/common"
+      },
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "CommonServer": {
+        "$path": "../../shared/server"
+      },
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    }
+  }
+}
