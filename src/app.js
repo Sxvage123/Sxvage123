@@ -3,7 +3,7 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { saveState } from './store.js';
-import { computeStats, earnedBadges, RANKS } from './lib/game.js';
+import { computeStats, earnedBadges, RANKS, invalidateMeals } from './lib/game.js';
 import { generateChallenge } from './lib/challenges.js';
 import { settleLeague, LEAGUES } from './lib/league.js';
 import { dayKey, addDays } from './lib/dates.js';
@@ -82,6 +82,7 @@ export const app = {
   update(mutator, { render = true } = {}) {
     const beforeXP = this.stats?.xp || 0;
     mutator(this.state);
+    invalidateMeals();
     if (this.state.profile && !this.state.profile.customGoals) Object.assign(this.state.profile, targetsFor(this.state.profile));
     this.refresh();
     saveState(this.state);

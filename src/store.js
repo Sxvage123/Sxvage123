@@ -67,7 +67,9 @@ export function exportJSON(state) {
   return JSON.stringify({ app: 'grindfit', exportedAt: new Date().toISOString(), state }, null, 1);
 }
 
-const isImage = (v) => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+const isImage = (v) =>
+  typeof v === 'string' &&
+  (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) || /^https?:\/\/localhost\/_capacitor_file_\/[\w./-]+\.jpg$/.test(v));
 const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
 const str = (v, max = 120) => (typeof v === 'string' ? v.slice(0, max) : '');
 

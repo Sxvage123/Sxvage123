@@ -7,6 +7,7 @@ import { FOODS, FOOD_CATEGORIES, searchFoods, foodForLabel } from '../lib/foods.
 import { pickImage, toCanvas, thumbnail, isNative } from '../ml/media.js';
 import { classifyFood } from '../ml/vision.js';
 import { uid } from '../store.js';
+import { storeThumb, deleteThumb } from '../thumbs.js';
 import { lookupBarcode, scanBarcode, searchOnline } from './barcode.js';
 
 export const MEAL_TYPES = [
@@ -31,7 +32,7 @@ export function renderFood(root, app) {
   if (!viewDate || viewDate > app.today) viewDate = app.today;
   const p = state.profile;
   const t = dayTotals(state, viewDate);
-  const meals = mealsOn(state, viewDate).sort((a, b) => a.time.localeCompare(b.time));
+  const meals = [...mealsOn(state, viewDate)].sort((a, b) => a.time.localeCompare(b.time));
   const remaining = p.calorieGoal - Math.round(t.calories);
 
   root.innerHTML = `
@@ -157,16 +158,20 @@ export function openAddFood(app, mode = 'snap', opts = {}) {
 }
 
 // entries: [{ food, servings, thumb?, source }]
-function logEntries(app, ctx, entries) {
+async function logEntries(app, ctx, entries) {
   if (!entries.length) return;
   const now = new Date();
   const time = ctx.date === app.today ? now.toISOString() : `${ctx.date}T12:00:00`;
+  const ids = entries.map(() => uid());
+  // All items from one photo share one thumbnail file.
+  const thumbSrc = entries.find((e) => e.thumb)?.thumb;
+  const thumb = thumbSrc ? await storeThumb(ids[0], thumbSrc) : null;
   app.update((s) => {
-    for (const e of entries) {
+    for (const [i, e] of entries.entries()) {
       const k = e.servings;
       const f = e.food;
       s.meals.push({
-        id: uid(),
+        id: ids[i],
         date: ctx.date,
         time,
         mealType: ctx.mealType,
@@ -181,7 +186,7 @@ function logEntries(app, ctx, entries) {
         foodId: f.id,
         loggedOn: app.today,
         source: e.source,
-        thumb: e.thumb || null,
+        thumb: e.thumb ? thumb : null,
         estimated: !!e.estimated,
       });
       // Remember recently-used foods for one-tap logging.
@@ -298,7 +303,7 @@ function snapPane(body, app, ctx, done) {
       return;
     }
     const canvas = toCanvas(img, 640);
-    const thumb = thumbnail(canvas, 200);
+    const thumb = thumbnail(canvas, 180, 0.6);
     body.innerHTML = `
       <div class="analyzing">
         <div class="scan-frame"><img src="${esc(thumb)}" alt=""/><div class="scan-line"></div></div>
@@ -627,6 +632,8 @@ function editMeal(app, id) {
     el.querySelector('[data-del]').onclick = async () => {
       if (!(await confirmDialog({ title: 'Delete this entry?', message: `${m.name} will be removed from your log.`, confirm: 'Delete', danger: true }))) return;
       app.update((s) => (s.meals = s.meals.filter((y) => y.id !== id)));
+      // Only remove the photo file once no other entry from the same photo uses it.
+      if (m.thumb && !app.state.meals.some((y) => y.thumb === m.thumb)) deleteThumb(m.thumb.match(/thumbs\/([\w]+)\.jpg/)?.[1] || m.id, m.thumb);
       close();
     };
   });

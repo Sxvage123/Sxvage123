@@ -73,8 +73,27 @@ export function levelFor(xp) {
 
 // ---------- per-day nutrition ----------
 
+// Per-day index of meals. Rebuilt when the list grows/shrinks or after invalidateMeals()
+// (the app calls it on every state update, which covers in-place edits).
+let mealIndex = { ref: null, key: '', byDate: new Map() };
+let revision = 0;
+export function invalidateMeals() {
+  revision++;
+}
+const fingerprint = (meals) => `${revision}:${meals.length}:${meals[meals.length - 1]?.id || ''}`;
+
 export function mealsOn(state, date) {
-  return state.meals.filter((m) => m.date === date);
+  const key = fingerprint(state.meals);
+  if (mealIndex.ref !== state.meals || mealIndex.key !== key) {
+    const byDate = new Map();
+    for (const m of state.meals) {
+      const list = byDate.get(m.date);
+      if (list) list.push(m);
+      else byDate.set(m.date, [m]);
+    }
+    mealIndex = { ref: state.meals, key, byDate };
+  }
+  return mealIndex.byDate.get(date) || [];
 }
 
 // Meals logged on a later day ("back-dated") still count for nutrition, but not for XP or streaks.
