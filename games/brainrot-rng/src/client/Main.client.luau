@@ -5,6 +5,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
+local ModelView = require(ReplicatedStorage.Common.ModelView)
 local ShopUI = require(ReplicatedStorage.Common.ShopUI)
 local UI = require(ReplicatedStorage.Common.UI)
 
@@ -91,6 +92,14 @@ local function playReveal(id: string, lucky: boolean?, quick: boolean?)
 	end
 	revealName.Text = aura.Name
 	revealName.TextColor3 = aura.Color
+	local oldFigure = reveal:FindFirstChild("Figure")
+	if oldFigure then
+		oldFigure:Destroy()
+	end
+	local figure = ModelView.new(aura.Name, { Name = "Figure", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -4), Size = UDim2.fromOffset(170, 170) }, if aura.Chance >= 1000 then aura.Color else nil)
+	if figure then
+		figure.Parent = reveal
+	end
 	revealOdds.Text = "1 in " .. Format.Abbreviate(aura.Chance) .. (if lucky then "  (LUCKY ROLL)" else "")
 	if aura.Chance >= 1000 then
 		local flash = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = aura.Color, BackgroundTransparency = 0.2, ZIndex = 0, Parent = gui })

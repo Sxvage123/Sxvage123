@@ -5,6 +5,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
+local ModelView = require(ReplicatedStorage.Common.ModelView)
 local ShopUI = require(ReplicatedStorage.Common.ShopUI)
 local UI = require(ReplicatedStorage.Common.UI)
 
@@ -91,6 +92,21 @@ local function render()
 			nameLabel.Text = Config.Names[level]
 			levelLabel.Text = "Lv" .. level .. "  " .. Format.Cash(Config.Income(level)) .. "/s"
 		end
+		-- 3D figure of the brainrot in the cell (rebuilt only when the level changes).
+		local shown = if locked then 0 else level
+		if cell:GetAttribute("FigureLevel") ~= shown then
+			cell:SetAttribute("FigureLevel", shown)
+			local old = cell:FindFirstChild("Figure")
+			if old then
+				old:Destroy()
+			end
+			if shown > 0 then
+				local vp = ModelView.new(Config.Names[shown], { Name = "Figure", Size = UDim2.new(1, 0, 1, -20), ZIndex = 0 })
+				if vp then
+					vp.Parent = cell
+				end
+			end
+		end
 	end
 end
 
@@ -102,8 +118,8 @@ for i = 1, TOTAL do
 		BackgroundColor3 = Color3.fromRGB(45, 55, 85),
 		Parent = grid,
 	}, { UI.Corner(10), UI.Stroke(Color3.new(0, 0, 0), 2) }) :: TextButton
-	UI.Label("", { Name = "NameLabel", Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 40), TextWrapped = true, Parent = cell })
-	UI.Label("", { Name = "LevelLabel", Position = UDim2.new(0, 4, 1, -26), Size = UDim2.new(1, -8, 0, 22), TextColor3 = Color3.fromRGB(255, 255, 210), Parent = cell })
+	UI.Label("", { Name = "NameLabel", Position = UDim2.fromOffset(4, 2), Size = UDim2.new(1, -8, 0, 18), TextWrapped = true, ZIndex = 2, Parent = cell })
+	UI.Label("", { Name = "LevelLabel", Position = UDim2.new(0, 4, 1, -20), Size = UDim2.new(1, -8, 0, 18), TextColor3 = Color3.fromRGB(255, 255, 210), ZIndex = 2, Parent = cell })
 	cells[i] = cell
 	cell.Activated:Connect(function()
 		if i > (player:GetAttribute("Slots") or Config.BaseSlots) then

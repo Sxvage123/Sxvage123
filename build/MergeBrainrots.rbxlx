@@ -854,6 +854,73 @@ return Format
       </Item>
       <Item class="ModuleScript" referent="4">
         <Properties>
+          <string name="Name">ModelView</string>
+          <string name="Source"><![CDATA[-- Shows a brainrot character inside UI (a ViewportFrame with a framed camera).
+local BrainrotModels = require(script.Parent.BrainrotModels)
+
+local ModelView = {}
+
+-- First word of a display name -> model id, so any game can show a figure from just a name.
+local KEYWORDS = {
+	noobini = "noobini", pizzanini = "noobini", lirili = "lirili", tim = "tim_cheese", fluriflura = "fluri",
+	talpa = "talpa", svinina = "svinina", pipi = "pipi_kiwi", trippi = "trippi", tung = "tung", sahur = "tung",
+	gangster = "gangster", brr = "patapim", patapim = "patapim", chimpanzini = "chimpanzini", ballerina = "ballerina",
+	cappuccino = "cappuccino", frigo = "frigo", bombardiro = "bombardiro", orangutini = "orangutini",
+	cocofanto = "cocofanto", tralalero = "tralalero", odin = "odin_din", la = "la_vacca", vacca = "la_vacca",
+	garama = "garama", madundung = "garama", skibidi = "skibidi", rizzler = "skibidi", sigma = "skibidi",
+	golden = "tung", rainbow = "tralalero", void = "skibidi", gyatt = "trippi",
+}
+
+-- Returns a model id for an id or display name, or nil.
+function ModelView.Resolve(idOrName: string): string?
+	if BrainrotModels.Has(idOrName) then
+		return BrainrotModels.Resolve(idOrName)
+	end
+	for word in string.gmatch(string.lower(idOrName), "%a+") do
+		local id = KEYWORDS[word]
+		if id then
+			return id
+		end
+	end
+	return nil
+end
+
+-- Creates a ViewportFrame showing the character (or nil if there is no model for it).
+function ModelView.new(idOrName: string, props: { [string]: any }?, tint: Color3?): ViewportFrame?
+	local id = ModelView.Resolve(idOrName)
+	if not id then
+		return nil
+	end
+	local vp = Instance.new("ViewportFrame")
+	vp.BackgroundTransparency = 1
+	vp.Ambient = Color3.fromRGB(170, 170, 180)
+	vp.LightColor = Color3.fromRGB(255, 255, 255)
+	vp.LightDirection = Vector3.new(-1, -1.5, 1)
+	vp.Size = UDim2.fromScale(1, 1)
+	local model, root = BrainrotModels.Build(id, { Tint = tint })
+	model.Parent = vp
+	local size = root.Size
+	local radius = math.max(size.X, size.Y, size.Z)
+	local center = root.Position
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 30
+	camera.CFrame = CFrame.lookAt(center + Vector3.new(radius * 0.9, radius * 0.35, -radius * 1.6), center)
+	camera.Parent = vp
+	vp.CurrentCamera = camera
+	if props then
+		for k, v in props do
+			(vp :: any)[k] = v
+		end
+	end
+	return vp
+end
+
+return ModelView
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
           <string name="Name">ShopUI</string>
           <string name="Source"><![CDATA[-- Shared Robux shop window + purchase helper used by every game's client.
 -- Expects Config.Passes/Products (name -> id) and Config.PassInfo/ProductInfo (display rows).
@@ -994,7 +1061,7 @@ return ShopUI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">UI</string>
           <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
@@ -1121,11 +1188,11 @@ return UI
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="6">
+    <Item class="Folder" referent="7">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="7">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[-- Merge Brainrots: buy, merge two of the same level into the next, earn idle cash.
@@ -1199,15 +1266,15 @@ return Config
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="8">
+  <Item class="ServerScriptService" referent="9">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="9">
+    <Item class="Folder" referent="10">
       <Properties>
         <string name="Name">CommonServer</string>
       </Properties>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
@@ -1429,7 +1496,7 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
@@ -1581,11 +1648,11 @@ return MonetizationService
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="12">
+    <Item class="Folder" referent="13">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="13">
+      <Item class="Script" referent="14">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -1983,19 +2050,19 @@ DataService.Init("MergeBrainrots_v1", {
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="14">
+  <Item class="StarterPlayer" referent="15">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="15">
+    <Item class="StarterPlayerScripts" referent="16">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="16">
+      <Item class="Folder" referent="17">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="17">
+        <Item class="LocalScript" referent="18">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[-- Merge Brainrots client: tap a brainrot, then tap another of the same level to merge.
@@ -2005,6 +2072,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
+local ModelView = require(ReplicatedStorage.Common.ModelView)
 local ShopUI = require(ReplicatedStorage.Common.ShopUI)
 local UI = require(ReplicatedStorage.Common.UI)
 
@@ -2091,6 +2159,21 @@ local function render()
 			nameLabel.Text = Config.Names[level]
 			levelLabel.Text = "Lv" .. level .. "  " .. Format.Cash(Config.Income(level)) .. "/s"
 		end
+		-- 3D figure of the brainrot in the cell (rebuilt only when the level changes).
+		local shown = if locked then 0 else level
+		if cell:GetAttribute("FigureLevel") ~= shown then
+			cell:SetAttribute("FigureLevel", shown)
+			local old = cell:FindFirstChild("Figure")
+			if old then
+				old:Destroy()
+			end
+			if shown > 0 then
+				local vp = ModelView.new(Config.Names[shown], { Name = "Figure", Size = UDim2.new(1, 0, 1, -20), ZIndex = 0 })
+				if vp then
+					vp.Parent = cell
+				end
+			end
+		end
 	end
 end
 
@@ -2102,8 +2185,8 @@ for i = 1, TOTAL do
 		BackgroundColor3 = Color3.fromRGB(45, 55, 85),
 		Parent = grid,
 	}, { UI.Corner(10), UI.Stroke(Color3.new(0, 0, 0), 2) }) :: TextButton
-	UI.Label("", { Name = "NameLabel", Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 40), TextWrapped = true, Parent = cell })
-	UI.Label("", { Name = "LevelLabel", Position = UDim2.new(0, 4, 1, -26), Size = UDim2.new(1, -8, 0, 22), TextColor3 = Color3.fromRGB(255, 255, 210), Parent = cell })
+	UI.Label("", { Name = "NameLabel", Position = UDim2.fromOffset(4, 2), Size = UDim2.new(1, -8, 0, 18), TextWrapped = true, ZIndex = 2, Parent = cell })
+	UI.Label("", { Name = "LevelLabel", Position = UDim2.new(0, 4, 1, -20), Size = UDim2.new(1, -8, 0, 18), TextColor3 = Color3.fromRGB(255, 255, 210), ZIndex = 2, Parent = cell })
 	cells[i] = cell
 	cell.Activated:Connect(function()
 		if i > (player:GetAttribute("Slots") or Config.BaseSlots) then
@@ -2189,7 +2272,7 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="18">
+  <Item class="Workspace" referent="19">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 local BrainrotModels = require(ReplicatedStorage.Common.BrainrotModels)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
+local ModelView = require(ReplicatedStorage.Common.ModelView)
 local UI = require(ReplicatedStorage.Common.UI)
 
 local player = Players.LocalPlayer
@@ -251,13 +252,18 @@ local function renderInventory()
 			AutoButtonColor = true,
 			Parent = petGrid,
 		}, { UI.Corner(12), UI.Stroke(if entry.pet.Equipped then Color3.fromRGB(90, 255, 90) else color, if entry.pet.Equipped then 4 else 2) }) :: TextButton
-		UI.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 8),
-			Size = UDim2.fromOffset(44, 44),
-			BackgroundColor3 = entry.info.Color,
-			Parent = card,
-		}, { UI.Corner(22), UI.Stroke(Color3.new(0, 0, 0), 2) })
+		local figure = ModelView.new(entry.info.Id, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2), Size = UDim2.fromOffset(60, 56) })
+		if figure then
+			figure.Parent = card
+		else
+			UI.new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 8),
+				Size = UDim2.fromOffset(44, 44),
+				BackgroundColor3 = entry.info.Color,
+				Parent = card,
+			}, { UI.Corner(22), UI.Stroke(Color3.new(0, 0, 0), 2) })
+		end
 		UI.Label(entry.info.Name, { Position = UDim2.fromOffset(4, 56), Size = UDim2.new(1, -8, 0, 22), Parent = card })
 		UI.Label("x" .. Format.Abbreviate(entry.info.Multiplier), { Position = UDim2.fromOffset(4, 78), Size = UDim2.new(1, -8, 0, 20), TextColor3 = Color3.fromRGB(255, 160, 255), Parent = card })
 		UI.Label(entry.info.Rarity, { Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextColor3 = color, Parent = card })
@@ -365,9 +371,13 @@ local function playHatch(eggId: string, results: { string })
 		local color = Config.Rarities[info.Rarity]
 		e.Rotation = 0
 		e.BackgroundColor3 = info.Color
-		UI.Label(info.Rarity, { Position = UDim2.fromOffset(5, 40), Size = UDim2.new(1, -10, 0, 34), TextColor3 = color, Parent = e })
-		UI.Label(info.Name, { Position = UDim2.fromOffset(5, 80), Size = UDim2.new(1, -10, 0, 50), TextWrapped = true, Parent = e })
-		UI.Label("x" .. Format.Abbreviate(info.Multiplier), { Position = UDim2.fromOffset(5, 140), Size = UDim2.new(1, -10, 0, 34), TextColor3 = Color3.fromRGB(255, 160, 255), Parent = e })
+		local figure = ModelView.new(info.Id, { Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 0, 120), ZIndex = 2 })
+		if figure then
+			figure.Parent = e
+		end
+		UI.Label(info.Rarity, { Position = UDim2.fromOffset(5, 4), Size = UDim2.new(1, -10, 0, 28), TextColor3 = color, ZIndex = 3, Parent = e })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(5, 132), Size = UDim2.new(1, -10, 0, 44), TextWrapped = true, ZIndex = 3, Parent = e })
+		UI.Label("x" .. Format.Abbreviate(info.Multiplier), { Position = UDim2.fromOffset(5, 178), Size = UDim2.new(1, -10, 0, 34), TextColor3 = Color3.fromRGB(255, 160, 255), ZIndex = 3, Parent = e })
 	end
 	task.wait(1.6)
 	hatchFrame.Visible = false

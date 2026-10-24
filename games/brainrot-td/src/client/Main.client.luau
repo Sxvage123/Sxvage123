@@ -8,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
+local ModelView = require(ReplicatedStorage.Common.ModelView)
 local ShopUI = require(ReplicatedStorage.Common.ShopUI)
 local UI = require(ReplicatedStorage.Common.UI)
 
@@ -173,7 +174,12 @@ local function renderHotbar()
 				BackgroundColor3 = Color3.fromRGB(35, 40, 60),
 				Parent = hotbar,
 			}, { UI.Corner(12), UI.Stroke(Config.RarityColor[unit.Rarity], 3) }) :: TextButton
-			UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = unit.Color, Parent = b }, { UI.Corner(17) })
+			local figure = ModelView.new(unit.Id, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(52, 44) })
+			if figure then
+				figure.Parent = b
+			else
+				UI.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = unit.Color, Parent = b }, { UI.Corner(17) })
+			end
 			UI.Label(unit.Name, { Position = UDim2.fromOffset(3, 42), Size = UDim2.new(1, -6, 0, 26), TextWrapped = true, Parent = b })
 			UI.Label("$" .. unit.Cost, { Position = UDim2.fromOffset(3, 70), Size = UDim2.new(1, -6, 0, 20), TextColor3 = Color3.fromRGB(120, 255, 120), Parent = b })
 			b.Activated:Connect(function()
@@ -324,7 +330,7 @@ end
 
 local summonFrame, summonList = modal("SUMMON", Color3.fromRGB(60, 30, 90))
 local summonGrid = Instance.new("UIGridLayout")
-summonGrid.CellSize = UDim2.fromOffset(150, 70)
+summonGrid.CellSize = UDim2.fromOffset(160, 74)
 summonGrid.CellPadding = UDim2.fromOffset(8, 8)
 summonGrid.SortOrder = Enum.SortOrder.LayoutOrder
 summonGrid.Parent = summonList
@@ -352,6 +358,10 @@ local function doSummon(count: number)
 	for i, id in result do
 		local unit = Config.UnitById[id]
 		local card = UI.new("Frame", { LayoutOrder = i, BackgroundColor3 = Config.RarityColor[unit.Rarity]:Lerp(Color3.new(0, 0, 0), 0.5), Parent = summonList }, { UI.Corner(10), UI.Stroke(Config.RarityColor[unit.Rarity], 3) })
+		local figure = ModelView.new(unit.Id, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -2, 0.5, 0), Size = UDim2.fromOffset(60, 66) })
+		if figure then
+			figure.Parent = card
+		end
 		UI.Label(unit.Name, { Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 36), TextWrapped = true, Parent = card })
 		UI.Label(unit.Rarity, { Position = UDim2.fromOffset(4, 42), Size = UDim2.new(1, -8, 0, 22), TextColor3 = Config.RarityColor[unit.Rarity], Parent = card })
 	end
