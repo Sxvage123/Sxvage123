@@ -7,7 +7,7 @@ out=$(mktemp -d)
 python3 - "$out" <<'PY'
 import glob, json, sys
 out = sys.argv[1]
-sources = {p: open(p).read() for p in glob.glob("shared/**/*.luau", recursive=True)}
+sources = {p: open(p).read() for p in glob.glob("shared/**/*.luau", recursive=True) + glob.glob("games/*/src/shared/*.luau")}
 with open(f"{out}/sources.luau", "w") as f:
     f.write("SOURCES = {\n")
     for path, src in sources.items():

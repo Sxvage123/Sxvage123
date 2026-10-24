@@ -248,6 +248,11 @@ function H.load(path, siblings)
 			return 1_700_000_000 + math.floor(now)
 		end }, { __index = os }),
 		warn = function() end,
+		Color3 = { fromRGB = function(r, g, b)
+			return { r, g, b }
+		end, new = function(r, g, b)
+			return { r, g, b }
+		end },
 	}, { __index = _G })
 	setfenv(fn, env)
 	return fn()

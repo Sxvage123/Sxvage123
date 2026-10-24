@@ -12,6 +12,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Grow a Brainrot** | Grow a Garden | `build/GrowABrainrot.rbxlx` |
 | **Brainrot Tycoon** | Classic dropper tycoons | `build/BrainrotTycoon.rbxlx` |
 | **Survive Tung Tung Sahur** | Round-based chase/survival | `build/SurviveTungTungSahur.rbxlx` |
+| **Brainrot RNG** | Sol's RNG (aura rolling) | `build/BrainrotRNG.rbxlx` |
 
 More games are listed at the bottom as they get added.
 

@@ -151,6 +151,30 @@ H.advance(60)
 check(DataServiceD.Get(carol) == nil and carol.kicked ~= nil, "kick when data can't load")
 H.failWrites = false
 
+---------------------------------------------------------------- RNG odds roughly match "1 in N"
+do
+	local RNG = H.load("games/brainrot-rng/src/shared/Config.luau")
+	local counts = {}
+	local n = 400_000
+	for _ = 1, n do
+		local id = RNG.Roll(1, math.random)
+		counts[id] = (counts[id] or 0) + 1
+	end
+	for _, id in { "tim", "talpa", "tung" } do
+		local expected = n / RNG.AuraById[id].Chance
+		local got = counts[id] or 0
+		check(got > expected * 0.75 and got < expected * 1.25, "rng odds for " .. id .. " expected ~" .. math.floor(expected) .. " got " .. got)
+	end
+	-- 10x luck should make a 1-in-500 roughly 10x as common
+	local lucky = 0
+	for _ = 1, 100_000 do
+		if RNG.Roll(10, math.random) == "tung" then
+			lucky += 1
+		end
+	end
+	check(lucky > 1400 and lucky < 2600, "luck scales odds (got " .. lucky .. " /100k, expected ~2000)")
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
 	error("tests failed")

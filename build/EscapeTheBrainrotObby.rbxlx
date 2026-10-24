@@ -666,7 +666,12 @@ local function processReceipt(receipt)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	if table.find(data.Receipts, receipt.PurchaseId) then
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+		-- Already applied in memory; only confirm once it's actually saved
+		-- (an earlier save may have failed).
+		if DataService.Save(player, false) then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local name = productIdToName[receipt.ProductId]
 	local handler = name and handlers[name]
