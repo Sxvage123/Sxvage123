@@ -18,6 +18,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Brainrot Ball** | Blade Ball (parry PvP + sword crates) | `build/BrainrotBall.rbxlx` |
 | **Merge Brainrots** | Idle merge games (mobile-friendly UI) | `build/MergeBrainrots.rbxlx` |
 | **Find the Brainrots** | Find-the-X collection games (hints/radar) | `build/FindTheBrainrots.rbxlx` |
+| **Brainrot Lifting Simulator** | Arm Wrestle Simulator (lift + boss arm-wrestling) | `build/BrainrotLiftingSimulator.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
