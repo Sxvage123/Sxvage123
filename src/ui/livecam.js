@@ -156,7 +156,11 @@ export function liveCapture({ view = 'front', facing = 'environment' } = {}) {
         s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 1920 } }, audio: false });
       } catch (e) {
         if (closed || token !== startToken) return;
-        status.innerHTML = `Camera unavailable: ${esc(e.message || e.name)}<br/><small>Allow camera access in Settings, or use “Upload photo”.</small>`;
+        status.innerHTML = `Camera unavailable: ${esc(e.message || e.name)}<br/><small>Allow camera access in Android Settings → Apps → GrindFit, or upload a photo.</small><br/><button class="btn btn-primary btn-sm mt" data-upload-instead>Upload a photo instead</button>`;
+        status.querySelector('[data-upload-instead]').onclick = () => {
+          stop();
+          resolve('upload');
+        };
         return;
       }
       // Closed or flipped while the camera was starting: release this stream immediately.

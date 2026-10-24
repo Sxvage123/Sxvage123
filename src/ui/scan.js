@@ -168,7 +168,8 @@ async function getPhoto(mode, view) {
   try {
     if (mode === 'live') {
       const c = await liveCapture({ view });
-      return c;
+      if (c !== 'upload') return c;
+      // Camera blocked: fall through to the gallery picker.
     }
     const img = await pickImage('gallery');
     return toCanvas(img, 1280);
