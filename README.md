@@ -49,7 +49,7 @@ More games are listed at the bottom as they get added.
    - Security → turn on **Enable Studio Access to API Services**, so saving works in Studio.
    - Places → set **Max Players**. Use 8 for Yoink a Brainrot (8 bases), and 6 for Grow a Brainrot and Brainrot Tycoon (6 plots each).
    - Basic Info: pick a genre, then add a good **icon and thumbnails**. Thumbnails matter more than anything else for clicks.
-3. **Create the paid items.** In the Creator Dashboard, open your experience → Monetization:
+3. **Create the paid items.** The full list with prices for every game is in `MONETIZATION.md`, with icons in `monetization/icons/`. In the Creator Dashboard, open your experience → Monetization:
    - **Passes:** make one for each entry in that game's `src/shared/Config.luau` → `Config.Passes`.
      Suggested prices are in `Config.PassInfo`.
    - **Developer Products:** make one for each entry in `Config.Products`. Prices are in `Config.ProductInfo`.
