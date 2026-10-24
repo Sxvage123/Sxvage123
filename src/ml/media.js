@@ -1,7 +1,7 @@
 // Getting images in: native camera/gallery on Android, file input on the web.
 
 import { Capacitor } from '@capacitor/core';
-import { Camera } from '@capacitor/camera';
+import { Camera, MediaTypeSelection } from '@capacitor/camera';
 
 export const isNative = () => Capacitor.isNativePlatform();
 
@@ -79,7 +79,7 @@ export async function pickImage(source = 'camera') {
         const r = await Camera.takePhoto({ quality: 85, targetWidth: 1600, targetHeight: 1600, correctOrientation: true });
         src = r.webPath || (r.uri && Capacitor.convertFileSrc(r.uri));
       } else {
-        const r = await Camera.chooseFromGallery({ mediaType: 'photo', allowMultipleSelection: false, limit: 1 });
+        const r = await Camera.chooseFromGallery({ mediaType: MediaTypeSelection.Photo, allowMultipleSelection: false, limit: 1 });
         const m = r.results?.[0];
         src = m && (m.webPath || (m.uri && Capacitor.convertFileSrc(m.uri)));
       }
