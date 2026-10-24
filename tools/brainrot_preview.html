@@ -1,0 +1,75 @@
+<title>Brainrot Model Lineup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito+Sans:wght@400;700&display=swap">
+<style>
+/* Layout: a toy-catalog grid of rendered figures */
+:root {
+  --bg: #f3f5fa; --surface: #ffffff; --fg: #1b1f2e; --muted: #5d6478; --line: #dde1ec; --accent: #ff4fa3;
+  --display: "Fredoka", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --body: "Nunito Sans", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12141c; --surface: #1c1f2b; --fg: #eef0f7; --muted: #9aa1b5; --line: #2c3040; --accent: #ff6fb5; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #12141c; --surface: #1c1f2b; --fg: #eef0f7; --muted: #9aa1b5; --line: #2c3040; --accent: #ff6fb5; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+main { max-width: 1100px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 5vw, 40px); margin: 0; text-wrap: balance; }
+.intro { max-width: 65ch; color: var(--muted); margin: 6px 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 6px; min-width: 0; }
+.card img { width: 100%; aspect-ratio: 1; border-radius: 8px; background: linear-gradient(#cfe6ff, #eef6ff); display: block; }
+.name { font-weight: 700; font-size: 14px; line-height: 1.25; }
+.meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+<main>
+  <header>
+    <h1>Brainrot Model Lineup</h1>
+    <p class="intro">Every character as the games now build it out of Roblox parts, rendered from the exact part list in the code. Each one is shown from a three-quarter front view.</p>
+  </header>
+  <div class="grid" id="grid"></div>
+</main>
+<!--THREE-->
+<script>
+const DATA = /*DATA*/null;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+renderer.setSize(360, 360); renderer.setPixelRatio(1);
+const MAT = { Neon: "basic", Glass: "glass" };
+function build(parts) {
+  const g = new THREE.Group();
+  for (const p of parts) {
+    const [sx, sy, sz] = p.size;
+    let geo;
+    if (p.s === "ball") geo = new THREE.SphereGeometry(sx / 2, 28, 18);
+    else if (p.s === "cyl") geo = new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 28);
+    else geo = new THREE.BoxGeometry(sx, sy, sz);
+    const color = new THREE.Color(`rgb(${p.c[0]},${p.c[1]},${p.c[2]})`);
+    const mat = p.m === "Neon" ? new THREE.MeshBasicMaterial({ color })
+      : new THREE.MeshLambertMaterial({ color, transparent: p.m === "Glass", opacity: p.m === "Glass" ? 0.6 : 1 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(p.pos[0], p.pos[1], p.pos[2]);
+    m.rotation.set(p.r[0] * Math.PI / 180, p.r[1] * Math.PI / 180, p.r[2] * Math.PI / 180, "XYZ");
+    g.add(m);
+  }
+  return g;
+}
+function snap(group) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-5, 10, -8); scene.add(sun);
+  scene.add(group);
+  const bb = new THREE.Box3().setFromObject(group);
+  const c = bb.getCenter(new THREE.Vector3()); const s = bb.getSize(new THREE.Vector3()).length();
+  const cam = new THREE.PerspectiveCamera(32, 1, 0.1, 500);
+  cam.position.set(c.x + s * 1.05, c.y + s * 0.35, c.z - s * 1.15); cam.lookAt(c);
+  renderer.render(scene, cam);
+  return renderer.domElement.toDataURL("image/png");
+}
+const grid = document.getElementById("grid");
+for (const [id, d] of Object.entries(DATA)) {
+  const el = document.createElement("div"); el.className = "card";
+  el.innerHTML = `<img alt="${d.name}" src="${snap(build(d.parts))}"><div class="name">${d.name}</div><div class="meta">${d.parts.length} parts</div>`;
+  grid.appendChild(el);
+}
+document.body.dataset.ready = "1";
+</script>
