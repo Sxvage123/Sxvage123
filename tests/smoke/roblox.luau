@@ -873,6 +873,14 @@ end
 cm("Model").SetPrimaryPartCFrame = function(inst, cframe)
 	inst:PivotTo(cframe)
 end
+local modelScales = setmetatable({}, { __mode = "k" })
+cm("Model").ScaleTo = function(inst, scale)
+	assert(type(scale) == "number" and scale > 0, "ScaleTo expects a positive number")
+	modelScales[inst] = scale
+end
+cm("Model").GetScale = function(inst)
+	return modelScales[inst] or 1
+end
 
 -- Humanoid
 cm("Humanoid").after.Health = function(inst, s, v)
