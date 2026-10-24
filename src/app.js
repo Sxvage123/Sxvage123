@@ -6,6 +6,7 @@ import { saveState } from './store.js';
 import { computeStats, earnedBadges, RANKS, invalidateMeals } from './lib/game.js';
 import { generateChallenge } from './lib/challenges.js';
 import { settleLeague, LEAGUES } from './lib/league.js';
+import { weeklyRecap } from './lib/recap.js';
 import { dayKey, addDays } from './lib/dates.js';
 import { computeTargets } from './lib/nutrition.js';
 import { xpPop, toast, confetti, haptic, sheet, esc, setHaptics } from './ui/dom.js';
@@ -239,18 +240,39 @@ function showRankUp(rank, bigRank) {
 function showLeagueResult(r, newTier) {
   const league = LEAGUES[newTier];
   const msg = r.result === 'promoted' ? `Promoted to ${league.name}!` : r.result === 'demoted' ? `Demoted to ${league.name}` : `You held your spot in ${league.name}`;
+  const w = weeklyRecap(app.state, app.stats, r.week);
   if (r.result === 'promoted') confetti();
+  const tile = (big, small) => `<div class="stat"><b>${big}</b><span>${small}</span></div>`;
   sheet((el, close) => {
     el.innerHTML = `
       <div class="rankup">
-        <div class="rankup-label">LAST WEEK’S LEAGUE</div>
+        <div class="rankup-label">WEEKLY RECAP</div>
         <div class="league-big">${league.icon}</div>
         <h1 class="rankup-title" style="color:${league.color}">${esc(msg)}</h1>
         <p class="muted">You finished <b>#${r.place}</b> with <b>${r.xp.toLocaleString()} XP</b>.</p>
+        <div class="stat-grid">
+          ${tile(`${w.daysLogged}/7`, 'days logged')}
+          ${tile(w.meals, 'meals')}
+          ${tile(w.avgCalories ? w.avgCalories.toLocaleString() : '—', 'avg kcal')}
+          ${tile(`${w.proteinDays}/7`, 'protein days')}
+          ${tile(`${w.targetDays}/7`, 'on-target days')}
+          ${tile(`${w.challenges}/7`, 'challenges')}
+          ${w.bodyFatChange !== null ? tile(`${w.bodyFatChange <= 0 ? '▼' : '▲'} ${Math.abs(w.bodyFatChange)}%`, 'body fat') : ''}
+        </div>
+        <p class="muted small">${recapLine(w)}</p>
         <button class="btn btn-primary btn-block mt" data-ok>New week, new grind</button>
       </div>`;
     el.querySelector('[data-ok]').onclick = () => close();
   });
+}
+
+// One honest, specific line of coaching based on last week.
+function recapLine(w) {
+  if (!w.daysLogged) return 'Quiet week. Log one meal today to restart your streak.';
+  if (w.daysLogged < 5) return `You logged ${w.daysLogged} days. Aim for 5+ this week, since consistency is where the XP is.`;
+  if (w.proteinDays < 4) return 'Logging is locked in. Next level: hit your protein at least 4 days this week.';
+  if (w.targetDays < 4) return 'Protein’s on point. Now tighten up calories: land on target 4+ days.';
+  return 'Elite week. Keep the streak alive and go for promotion.';
 }
 
 export { RANKS, LEAGUES, addDays };

@@ -34,8 +34,9 @@ function rivalsFor(week, tier, baseline) {
   for (let i = 0; i < RIVALS; i++) {
     const name = names.splice(Math.floor(rand() * names.length), 1)[0];
     // Skill spread so some rivals are beatable and a couple are monsters.
-    const skill = 0.35 + rand() * 1.25 + (rand() < 0.15 ? 0.6 : 0);
-    const tierBoost = 1 + tier * 0.08;
+    // Centred a bit below your recent average so steady grinders climb; a rare "monster" keeps the top spots spicy.
+    const skill = 0.28 + rand() * 0.9 + (rand() < 0.12 ? 0.55 : 0);
+    const tierBoost = 1 + tier * 0.05;
     rivals.push({ name, final: Math.round(baseline * skill * tierBoost), curve: 0.7 + rand() * 0.6, seed: rand() });
   }
   return rivals;
