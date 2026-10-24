@@ -12,6 +12,7 @@ import { showGuide } from './onboarding.js';
 import { APP_VERSION } from '../version.js';
 import { exportJSON, importJSON, emptyState, flush, saveState } from '../store.js';
 import { inlineThumbs, migrateInlineThumbs, cleanupThumbs } from '../thumbs.js';
+import { diagReport, clearDiag, diagCount } from '../diag.js';
 
 export function renderMe(root, app) {
   const { state, stats } = app;
@@ -59,6 +60,7 @@ export function renderMe(root, app) {
     <div class="list-head">About</div>
     <button class="list-row" data-guide><span>How to play</span><span class="muted">›</span></button>
     <button class="list-row" data-about><span>How the AI works</span><span class="muted">›</span></button>
+    <button class="list-row" data-diag><span>Diagnostics</span><span class="muted">${diagCount() ? `${diagCount()} logged ›` : 'All good ›'}</span></button>
     <div class="list-row static"><span>Version</span><span class="muted">${APP_VERSION} · offline AI</span></div>
   </section>
   <p class="muted tiny center">All data and photos stay on this phone. No account, no subscription, no API keys.</p>
@@ -96,6 +98,7 @@ export function renderMe(root, app) {
   };
   root.querySelector('[data-about]').onclick = () => aboutSheet();
   root.querySelector('[data-guide]').onclick = () => showGuide();
+  root.querySelector('[data-diag]').onclick = () => diagSheet(app);
 }
 
 const EDITORS = {
@@ -260,6 +263,37 @@ function aboutSheet() {
         <h4>⚠️ Disclaimer</h4>
         <p>GrindFit is not a medical device and doesn’t give medical advice. If you have a history of disordered eating, or any health condition, talk to a professional before changing your diet.</p>
       </div>`;
+    },
+    { full: true },
+  );
+}
+
+function diagSheet(app) {
+  const report = diagReport();
+  sheet(
+    (el, close) => {
+      el.innerHTML = `
+      <h2 class="sheet-title">Diagnostics</h2>
+      <p class="muted small">If something isn’t working, share this report so it can be fixed. It contains no personal data, only app errors and device info.</p>
+      <pre class="diag">${esc(report)}</pre>
+      <div class="row gap mt">
+        <button class="btn btn-ghost" data-clear>Clear</button>
+        <button class="btn btn-primary grow" data-share>Share report</button>
+      </div>`;
+      el.querySelector('[data-clear]').onclick = () => {
+        clearDiag();
+        close();
+        app.render();
+      };
+      el.querySelector('[data-share]').onclick = async () => {
+        try {
+          if (Capacitor.isNativePlatform()) await Share.share({ title: 'GrindFit diagnostics', text: report });
+          else await navigator.clipboard.writeText(report);
+          if (!Capacitor.isNativePlatform()) toast('Copied to clipboard', { icon: '📋' });
+        } catch (e) {
+          if (!String(e?.message || e).toLowerCase().includes('cancel')) toast('Couldn’t share the report', { type: 'error' });
+        }
+      };
     },
     { full: true },
   );

@@ -15,8 +15,10 @@ import { closeTopOverlay, toast } from './ui/dom.js';
 import { closeLiveCam } from './ui/livecam.js';
 import { preloadModels } from './ml/vision.js';
 import { dayKey } from './lib/dates.js';
+import { initDiag, logDiag } from './diag.js';
 
 async function boot() {
+  await initDiag();
   const state = await loadState();
   app.init(state, {
     onboarding: renderOnboarding,
@@ -71,6 +73,7 @@ async function boot() {
 }
 
 boot().catch((e) => {
+  logDiag('boot', e);
   console.error(e);
   document.querySelector('#app').innerHTML = `<div class="fatal"><h2>Something went wrong</h2><pre>${String(e?.stack || e).replace(/</g, '&lt;')}</pre></div>`;
 });
