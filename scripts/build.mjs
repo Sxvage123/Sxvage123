@@ -15,9 +15,9 @@ mkdirSync(join(out, 'mediapipe'), { recursive: true });
 copyFileSync(join(root, 'src/index.html'), join(out, 'index.html'));
 cpSync(join(root, 'assets/icons'), join(out, 'icons'), { recursive: true });
 
-// MediaPipe WASM runtime (SIMD + fallback builds).
+// MediaPipe WASM runtime. Only the SIMD build: every supported Android WebView (Chrome 91+) has SIMD.
 const wasm = join(root, 'node_modules/@mediapipe/tasks-vision/wasm');
-for (const f of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm', 'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm']) {
+for (const f of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm']) {
   copyFileSync(join(wasm, f), join(out, 'mediapipe', f));
 }
 

@@ -21,6 +21,8 @@ export function renderScan(root, app) {
   const scans = [...state.scans].sort((a, b) => a.time.localeCompare(b.time));
   const last = scans[scans.length - 1];
   const first = scans[0];
+  // Your best result on your first scan day is the baseline (same-day rescans are calibration, not progress).
+  const baseline = first ? Math.min(...scans.filter((x) => x.date === first.date).map((x) => x.bodyFat)) : 0;
   const adult = p.age >= 18;
   const cat = last ? categoryFor(p.sex, last.bodyFat) : null;
 
@@ -33,7 +35,7 @@ export function renderScan(root, app) {
           <div class="bf-num">${fmt(last.bodyFat, 1)}<span>%</span></div>
           <div class="bf-cat" style="color:${cat.color}">${esc(cat.label)}</div>
           ${scaleBar(p.sex, last.bodyFat)}
-          ${scans.length > 1 ? `<div class="bf-delta ${last.bodyFat <= first.bodyFat ? 'good' : 'bad'}">${last.bodyFat <= first.bodyFat ? '▼' : '▲'} ${fmt(Math.abs(last.bodyFat - first.bodyFat), 1)}% since first scan</div>` : ''}
+          ${last.date !== first.date ? `<div class="bf-delta ${last.bodyFat <= baseline ? 'good' : 'bad'}">${last.bodyFat <= baseline ? '▼' : '▲'} ${fmt(Math.abs(last.bodyFat - baseline), 1)}% since ${esc(shortDay(first.date))}</div>` : ''}
         </section>`
       : `<section class="card bf-empty">
           <div class="bf-empty-art">🧬</div>

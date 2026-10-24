@@ -175,3 +175,21 @@ test('league: rivals start at zero in the week you join', () => {
   assert.ok(later.some((r) => r.xp > 0));
   assert.ok(Math.max(...later.map((r) => r.xp)) < 1500);
 });
+
+test('scan XP: same-day calibration scan does not pay a new-low bonus', () => {
+  const s = blank();
+  s.scans = [
+    { id: 'a', date: '2026-03-01', time: '2026-03-01T08:00', bodyFat: 22 },
+    { id: 'b', date: '2026-03-08', time: '2026-03-08T08:00', bodyFat: 30 },
+    { id: 'c', date: '2026-03-08', time: '2026-03-08T08:10', bodyFat: 19.2 },
+  ];
+  const x = scanXP(s);
+  // 3/8: one base scan + new low vs 22 (2.8 pts -> 280)
+  assert.equal(x.get('2026-03-08').reduce((a, i) => a + i.xp, 0), 50 + 280);
+  const t = blank();
+  t.scans = [
+    { id: 'b', date: '2026-03-08', time: '2026-03-08T08:00', bodyFat: 30 },
+    { id: 'c', date: '2026-03-08', time: '2026-03-08T08:10', bodyFat: 19.2 },
+  ];
+  assert.equal(scanXP(t).get('2026-03-08').reduce((a, i) => a + i.xp, 0), 50);
+});

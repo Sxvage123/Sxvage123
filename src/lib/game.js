@@ -224,23 +224,30 @@ export function dayXP(state, date, streak) {
   return { items, total: base + bonus, multiplier: mult };
 }
 
-// Scan XP: one scan per day pays out; beating your best (lowest) body fat pays more.
+// Scan XP: one scan per day pays out; beating your best (lowest) body fat from a previous day pays
+// more. Same-day rescans (e.g. a tape scan to calibrate a photo scan) can't farm the new-low bonus.
 export function scanXP(state) {
   const byDate = new Map();
   const sorted = [...state.scans].sort((a, b) => a.time.localeCompare(b.time));
-  let best = null;
   const seen = new Set();
+  const bestBefore = (date) => {
+    let best = null;
+    for (const s of sorted) if (s.date < date && (best === null || s.bodyFat < best)) best = s.bodyFat;
+    return best;
+  };
+  const paidLow = new Set();
   for (const s of sorted) {
     const items = [];
     if (!seen.has(s.date)) {
       seen.add(s.date);
       items.push({ label: 'Body scan', xp: XP.scan });
     }
-    if (best !== null && s.bodyFat <= best - 0.5) {
+    const best = bestBefore(s.date);
+    if (best !== null && !paidLow.has(s.date) && s.bodyFat <= best - 0.5) {
+      paidLow.add(s.date);
       const xp = Math.min(XP.newLowCap, Math.round((best - s.bodyFat) * XP.newLowPerPoint));
       items.push({ label: `New body-fat low (−${(best - s.bodyFat).toFixed(1)}%)`, xp });
     }
-    if (best === null || s.bodyFat < best) best = s.bodyFat;
     const list = byDate.get(s.date) || [];
     list.push(...items.map((i) => ({ ...i, scanId: s.id })));
     byDate.set(s.date, list);
@@ -308,7 +315,11 @@ export function badgeStats(state, stats) {
     if (q[2].done) targetDays++;
   }
   const scans = [...state.scans].sort((a, b) => a.time.localeCompare(b.time));
-  const bfDrop = scans.length > 1 ? scans[0].bodyFat - Math.min(...scans.map((s) => s.bodyFat)) : 0;
+  // Measured from your best result on your first scan day, so same-day rescans don't count as progress.
+  const firstDay = scans[0]?.date;
+  const baseline = scans.length ? Math.min(...scans.filter((s) => s.date === firstDay).map((s) => s.bodyFat)) : 0;
+  const later = scans.filter((s) => s.date !== firstDay).map((s) => s.bodyFat);
+  const bfDrop = later.length ? Math.max(0, baseline - Math.min(...later)) : 0;
   return {
     meals: state.meals.length,
     scans: scans.length,
