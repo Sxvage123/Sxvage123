@@ -407,9 +407,14 @@ InstanceMT.__index = function(inst, k)
 	elseif k == "Name" then
 		return s.props.Name
 	end
-	local cm = classMethods[s.className]
-	if cm and cm.get and cm.get[k] then
-		return cm.get[k](inst, s)
+	local c = s.className
+	while c and c ~= "" do
+		local cmeth = classMethods[c]
+		if cmeth and cmeth.get and cmeth.get[k] then
+			return cmeth.get[k](inst, s)
+		end
+		local def = REFLECTION.Classes[c]
+		c = def and def.S
 	end
 	local m = member(s.className, k)
 	if m then

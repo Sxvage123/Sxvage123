@@ -118,6 +118,9 @@ local function buyEverything()
 end
 
 local stats = {}
+if SCENARIO then
+	print(SCENARIO(R, game, player))
+end
 stats.clicks1 = clickAll(1)
 step("after clicks", 2)
 stats.prompts = triggerPrompts()

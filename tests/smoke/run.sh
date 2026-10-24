@@ -44,7 +44,12 @@ for parts, cls, src in entries:
     print("{ path = {" + ",".join(json.dumps(p) for p in parts) + "}, class = \"" + cls + "\", source = [==[" + src + "]==] },")
 print("}")
 PY
-	cat "$out/reflection.luau" "$out/manifest.luau" tests/smoke/run_game.luau > "$out/main.luau"
+	if [ -f "tests/smoke/scenarios/$g.luau" ]; then
+		{ echo "SCENARIO = (function()"; cat "tests/smoke/scenarios/$g.luau"; echo "end)()"; } > "$out/scenario.luau"
+	else
+		echo "SCENARIO = nil" > "$out/scenario.luau"
+	fi
+	cat "$out/reflection.luau" "$out/manifest.luau" "$out/scenario.luau" tests/smoke/run_game.luau > "$out/main.luau"
 	echo "=== $g"
 	if ! (cd "$out" && "${LUAU:-luau}" main.luau) > "$out/result.txt" 2>&1; then
 		status=1
