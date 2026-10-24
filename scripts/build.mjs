@@ -22,7 +22,7 @@ for (const f of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm']) {
 }
 
 // On-device models (downloaded by scripts/fetch-models.mjs).
-for (const f of ['food_V1.tflite', 'pose_landmarker_full.task']) {
+for (const f of ['food_V1.tflite', 'efficientnet_lite0.tflite', 'pose_landmarker_full.task']) {
   const src = join(root, 'models-cache', f);
   if (!existsSync(src)) {
     console.error(`Missing model ${f}. Run: npm run models`);

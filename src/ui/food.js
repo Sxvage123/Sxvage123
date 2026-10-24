@@ -3,7 +3,7 @@
 import { esc, fmt, ring, bar, sheet, toast, haptic, confirmDialog, debounce, $ } from './dom.js';
 import { dayTotals, mealsOn } from '../lib/game.js';
 import { addDays, formatDay } from '../lib/dates.js';
-import { FOODS, FOOD_CATEGORIES, searchFoods, foodForLabel } from '../lib/foods.js';
+import { FOODS, FOOD_CATEGORIES, searchFoods, foodForLabel, IMAGENET_FOODS } from '../lib/foods.js';
 import { pickImage, toCanvas, thumbnail, isNative } from '../ml/media.js';
 import { classifyFood } from '../ml/vision.js';
 import { uid } from '../store.js';
@@ -311,7 +311,7 @@ function snapPane(body, app, ctx, done) {
         <span class="muted small" data-status>Loading AI model (first time takes a few seconds)</span>
       </div>`;
     try {
-      const preds = await classifyFood(canvas);
+      const preds = await classifyFood(canvas, { imagenetFoods: IMAGENET_FOODS });
       showPredictions(body, app, ctx, preds, thumb, done, () => snapPane(body, app, ctx, done));
     } catch (e) {
       console.error(e);
@@ -325,18 +325,17 @@ function snapPane(body, app, ctx, done) {
 }
 
 function showPredictions(body, app, ctx, preds, thumb, done, retake) {
-  // De-duplicate predictions that map to the same database entry, keep top 6.
-  const seen = new Set();
-  const items = [];
+  // Merge predictions that map to the same database entry (their scores add up), keep top 6.
+  const byFood = new Map();
   for (const pr of preds) {
     const m = foodForLabel(pr.label);
     if (!m) continue;
-    const key = m.food.id;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    items.push({ ...pr, ...m, servings: 1, selected: items.length === 0 && pr.score > 0.25 });
-    if (items.length >= 6) break;
+    const prev = byFood.get(m.food.id);
+    if (prev) prev.score = Math.min(0.99, prev.score + pr.score);
+    else byFood.set(m.food.id, { ...pr, ...m, servings: 1 });
   }
+  const items = [...byFood.values()].sort((a, b) => b.score - a.score).slice(0, 6);
+  if (items[0] && items[0].score > 0.25) items[0].selected = true;
   const confident = items[0] && items[0].score >= 0.35;
   const draw = () => {
     const sel = items.filter((i) => i.selected);

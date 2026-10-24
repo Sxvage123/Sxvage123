@@ -50,6 +50,10 @@ const RAW = {
     ['Raisins', '1/4 cup', 120, 1, 32, 0.2, ''],
     ['Kiwi', '1 fruit', 42, 0.8, 10, 0.4, ''],
     ['Cherries', '1 cup', 87, 1.5, 22, 0.3, 'cherry'],
+    ['Lemon', '1 fruit', 17, 0.6, 5, 0.2, 'lime'],
+    ['Figs', '2 medium', 74, 0.8, 19, 0.3, 'fig'],
+    ['Pomegranate seeds', '1/2 cup', 72, 1.5, 16, 1, 'pomegranate'],
+    ['Jackfruit', '1 cup', 157, 2.8, 38, 1, ''],
   ],
   'Vegetables & sides': [
     ['Garden salad (no dressing)', '2 cups', 35, 2, 7, 0.3, 'green salad, salad, garden salad'],
@@ -77,6 +81,13 @@ const RAW = {
     ['Spinach (cooked)', '1 cup', 41, 5, 7, 0.5, 'spinach'],
     ['Carrots', '1 cup', 52, 1.2, 12, 0.3, 'carrot'],
     ['Cucumber', '1 cup', 16, 0.7, 4, 0.1, ''],
+    ['Bell pepper', '1 medium', 31, 1, 7, 0.3, 'pepper, capsicum'],
+    ['Mushrooms (sautéed)', '1 cup', 80, 3, 5, 6, 'mushroom'],
+    ['Zucchini', '1 cup', 20, 1.5, 4, 0.4, 'courgette'],
+    ['Cauliflower', '1 cup', 27, 2, 5, 0.3, ''],
+    ['Cabbage', '1 cup', 22, 1.1, 5, 0.1, ''],
+    ['Squash (roasted)', '1 cup', 82, 1.8, 22, 0.2, 'butternut squash, acorn squash, spaghetti squash, pumpkin'],
+    ['Artichoke', '1 medium', 64, 3.5, 14, 0.4, ''],
   ],
   'Grains & bread': [
     ['White rice (cooked)', '1 cup', 205, 4, 45, 0.4, 'rice, steamed rice, white rice'],
@@ -173,6 +184,7 @@ const RAW = {
     ['Chili con carne', '1 bowl', 350, 25, 30, 14, 'chili, chilli, chili con carne'],
     ['Beef stew', '1 bowl', 400, 30, 30, 18, 'stew, beef stew, goulash'],
     ['Meatloaf', '1 slice', 350, 25, 15, 21, 'meatloaf'],
+    ['Chicken pot pie', '1 pie', 650, 25, 55, 37, 'pot pie, potpie'],
     ['Shepherd\'s pie', '1 serving', 500, 25, 40, 26, 'cottage pie, shepherd pie'],
     ['Roast dinner', '1 plate', 750, 45, 60, 35, 'sunday roast, roast dinner'],
     ['Kebab plate', '1 plate', 700, 45, 60, 30, 'kabob, kebab plate'],
@@ -244,6 +256,7 @@ const RAW = {
     ['Light beer', '12 oz', 105, 1, 6, 0, 'light beer'],
     ['Wine', '5 oz glass', 125, 0.1, 4, 0, 'wine, red wine, white wine'],
     ['Bubble tea', '16 oz', 350, 2, 70, 7, 'boba, bubble tea, milk tea'],
+    ['Eggnog', '1 cup', 340, 10, 34, 19, ''],
   ],
 };
 
@@ -296,6 +309,18 @@ export function searchFoods(query, list = FOODS, limit = 30) {
   }
   return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.f);
 }
+
+// ImageNet labels (general-purpose classifier) that are foods, mapped to database names.
+export const IMAGENET_FOODS = {
+  guacamole: 'Guacamole', consomme: 'Chicken noodle soup', 'hot pot': 'Beef stew', trifle: 'Tiramisu', 'ice cream': 'Ice cream',
+  'French loaf': 'White bread', bagel: 'Plain bagel', pretzel: 'Pretzels', cheeseburger: 'Cheeseburger', hotdog: 'Hot dog',
+  'mashed potato': 'Mashed potatoes', 'head cabbage': 'Cabbage', broccoli: 'Steamed broccoli', cauliflower: 'Cauliflower',
+  zucchini: 'Zucchini', 'spaghetti squash': 'Squash (roasted)', 'acorn squash': 'Squash (roasted)', 'butternut squash': 'Squash (roasted)',
+  cucumber: 'Cucumber', artichoke: 'Artichoke', 'bell pepper': 'Bell pepper', mushroom: 'Mushrooms (sautéed)', 'Granny Smith': 'Apple',
+  strawberry: 'Strawberries', orange: 'Orange', lemon: 'Lemon', fig: 'Figs', pineapple: 'Pineapple', banana: 'Banana', jackfruit: 'Jackfruit',
+  pomegranate: 'Pomegranate seeds', carbonara: 'Fettuccine Alfredo', 'meat loaf': 'Meatloaf', pizza: 'Cheese pizza', potpie: 'Chicken pot pie',
+  burrito: 'Burrito', 'red wine': 'Wine', espresso: 'Black coffee', eggnog: 'Eggnog', corn: 'Corn on the cob',
+};
 
 // ---------- recognised-dish → nutrition ----------
 
@@ -363,7 +388,10 @@ function keywordEstimate(label) {
 const MODIFIERS = new Set(['crab', 'clam', 'lobster', 'fish', 'shrimp', 'prawn', 'oyster', 'salmon', 'tuna', 'sea', 'pork', 'beef', 'lamb', 'mutton', 'rabbit', 'chicken', 'meat', 'cabbage', 'arctic', 'angel', 'jelly', 'swiss', 'apple', 'moule', 'hangtown', 'potato', 'rice', 'cheese', 'egg', 'tofu', 'bean', 'pot', 'scotch', 'pasta', 'macaroni', 'jello', 'snicker', 'watergate', 'frogeye', 'cookie', 'glorified']);
 
 // Maps a recognised dish label to a database entry or a dish-type estimate.
+const BY_NAME = new Map(FOODS.map((f) => [f.name, f]));
+
 export function foodForLabel(label) {
+  if (BY_NAME.has(label)) return { food: BY_NAME.get(label), exact: true };
   const lw = words(label);
   if (!lw.length) return null;
   const head = lw[lw.length - 1];
@@ -381,7 +409,8 @@ export function foodForLabel(label) {
       best = p;
     }
   }
-  if (best) return { food: best.food, exact: bestScore >= 10 + best.w.length && normalize(best.food.name.replace(/\(.*?\)/g, '')) === normalize(label) };
+  const bare = (x) => normalize(x.replace(/\(.*?\)/g, ''));
+  if (best) return { food: best.food, exact: best.food.name === label || bare(best.food.name) === bare(label) };
   const est = keywordEstimate(label) || GENERIC_DISH;
   return { food: { id: `est:${normalize(label)}`, name: label, category: 'Estimated', aliases: [], ...est }, estimated: true, generic: est === GENERIC_DISH };
 }

@@ -6,6 +6,7 @@ import { FilesetResolver, ImageClassifier, PoseLandmarker } from '@mediapipe/tas
 const WASM_PATH = new URL('mediapipe', document.baseURI).href.replace(/\/$/, '');
 const MODELS = {
   food: 'models/food_V1.tflite',
+  general: 'models/efficientnet_lite0.tflite',
   pose: 'models/pose_landmarker_full.task',
 };
 
@@ -33,6 +34,19 @@ export function loadFoodModel() {
     maxResults: 8,
   }, { gpu: false }).catch((e) => {
     foodPromise = null;
+    throw e;
+  }));
+}
+
+// General-purpose ImageNet classifier: much better at single ingredients (banana, broccoli…).
+let generalPromise;
+export function loadGeneralModel() {
+  return (generalPromise ||= create(ImageClassifier, {
+    baseOptions: { modelAssetPath: MODELS.general },
+    runningMode: 'IMAGE',
+    maxResults: 10,
+  }, { gpu: false }).catch((e) => {
+    generalPromise = null;
     throw e;
   }));
 }
@@ -67,16 +81,24 @@ export function loadVideoPoseModel() {
 export function preloadModels() {
   // Warm up in the background after first paint so the first scan feels instant.
   loadFoodModel().catch(() => {});
+  loadGeneralModel().catch(() => {});
 }
 
-// Returns [{ label, score }] best first. The food model has ~2000 dish classes.
-export async function classifyFood(image) {
-  const model = await loadFoodModel();
-  const result = model.classify(image);
-  const cats = result.classifications?.[0]?.categories || [];
-  return cats
-    .map((c) => ({ label: (c.displayName || c.categoryName || '').trim(), score: c.score }))
-    .filter((c) => c.label && c.label !== '__background__' && !c.label.startsWith('/'));
+const categories = (result) =>
+  (result.classifications?.[0]?.categories || []).map((c) => ({ label: (c.displayName || c.categoryName || '').trim(), score: c.score }));
+
+// Returns [{ label, score }] best first, merging the dish model (~2,000 dishes) with the
+// general model's food classes (mapped to database names).
+export async function classifyFood(image, { imagenetFoods = {} } = {}) {
+  const [dish, general] = await Promise.all([loadFoodModel(), loadGeneralModel().catch(() => null)]);
+  const out = categories(dish.classify(image)).filter((c) => c.label && c.label !== '__background__' && !c.label.startsWith('/'));
+  if (general) {
+    for (const c of categories(general.classify(image))) {
+      const name = imagenetFoods[c.label];
+      if (name && c.score >= 0.12) out.push({ label: name, score: c.score, general: true });
+    }
+  }
+  return out.sort((a, b) => b.score - a.score);
 }
 
 // Runs pose + segmentation on a still image and returns plain data (mask copied out of GPU memory).
