@@ -186,6 +186,7 @@ const BODY = {
     return `
     <h2 class="onb-title">Your daily targets</h2>
     <p class="muted">Based on a maintenance burn of <b>${t.tdee.toLocaleString()} kcal</b>/day. Change these any time in Me → Goals.</p>
+    ${p.age < 18 && draft.goal === 'cut' ? '<div class="banner">You’re still growing, so we don’t set a calorie deficit for under-18s. Train hard, hit your protein and let your body recomp.</div>' : ''}
     <div class="target-hero"><div class="target-num">${t.calories.toLocaleString()}</div><div class="muted">calories / day</div></div>
     <div class="macro-grid">
       <div class="macro-card p"><b>${t.protein}g</b><span>Protein</span></div>

@@ -213,3 +213,13 @@ test('back-dated meals count for nutrition but not XP or streaks', () => {
   assert.equal(stats.xpByDay.get('2026-03-09'), undefined);
   assert.equal(stats.xp, 10);
 });
+
+test('no body-scan challenges when scans are not allowed', () => {
+  let d = '2026-01-05'; // a Monday
+  for (let i = 0; i < 20; i++) {
+    const c = generateChallenge({ date: d, rankIndex: 0, canScan: false });
+    assert.notEqual(c.metric, 'body_scan');
+    d = addDays(d, 7);
+  }
+  assert.equal(generateChallenge({ date: '2026-01-05', rankIndex: 0, lastScanDate: null }).metric, 'body_scan');
+});

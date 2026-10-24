@@ -110,3 +110,8 @@ test('food mapping', () => {
     if (!['Beer', 'Light beer', 'Wine'].includes(f.name) && f.calories > 30) assert.ok(Math.abs(kcal - f.calories) / f.calories < 0.3, `${f.name} ${kcal} vs ${f.calories}`);
   }
 });
+
+test('no calorie deficit for under-18s', () => {
+  const teen = computeTargets({ sex: 'male', age: 16, heightCm: 175, weightKg: 70, activity: 1.55, goal: 'cut' });
+  assert.ok(teen.calories >= teen.tdee - 10);
+});

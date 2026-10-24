@@ -26,11 +26,15 @@ export function bmr({ sex, weightKg, heightCm, age }) {
   return sex === 'female' ? base - 161 : base + 5;
 }
 
+export const isMinor = (profile) => (profile.age || 0) < 18;
+
 export function computeTargets(profile) {
   const goal = GOALS[profile.goal] || GOALS.maintain;
   const tdee = bmr(profile) * (profile.activity || 1.375);
   const floor = profile.sex === 'female' ? 1200 : 1500;
-  const calories = Math.max(floor, Math.round((tdee * goal.calorieFactor) / 10) * 10);
+  // Teens are still growing: never set a calorie deficit for under-18s.
+  const factor = isMinor(profile) ? Math.max(1, goal.calorieFactor) : goal.calorieFactor;
+  const calories = Math.max(floor, Math.round((tdee * factor) / 10) * 10);
   const protein = Math.min(250, Math.round(profile.weightKg * goal.proteinPerKg));
   const fat = Math.round((calories * 0.27) / 9);
   const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));

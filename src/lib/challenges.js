@@ -53,7 +53,7 @@ export function generateChallenge(ctx) {
   const rand = seeded(`challenge:${ctx.date}:${ctx.reroll || 0}`);
   const dow = parseDay(ctx.date).getDay();
   const boss = dow === 0; // Sunday boss fight: harder, double XP
-  const scanDue = !ctx.lastScanDate || daysBetween(ctx.lastScanDate, ctx.date) >= 7;
+  const scanDue = ctx.canScan !== false && (!ctx.lastScanDate || daysBetween(ctx.lastScanDate, ctx.date) >= 7);
 
   // Weighted pick of challenge family.
   let family;

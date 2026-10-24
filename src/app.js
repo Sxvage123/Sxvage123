@@ -53,6 +53,7 @@ export const app = {
       rankIndex: stats.rank.index,
       proteinGoal: s.profile?.proteinGoal,
       lastScanDate: lastScan?.date,
+      canScan: (s.profile?.age || 0) >= 18,
     });
     saveState(s);
   },
@@ -67,6 +68,7 @@ export const app = {
       rankIndex: this.stats.rank.index,
       proteinGoal: s.profile?.proteinGoal,
       lastScanDate: lastScan?.date,
+      canScan: (s.profile?.age || 0) >= 18,
       reroll: (cur.reroll || 0) + 1,
     });
     // Rerolling into the same challenge would feel broken; nudge until different.
