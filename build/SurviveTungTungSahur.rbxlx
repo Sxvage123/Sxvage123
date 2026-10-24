@@ -1,0 +1,1584 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">ShopUI</string>
+          <string name="Source"><![CDATA[-- Shared Robux shop window + purchase helper used by every game's client.
+-- Expects Config.Passes/Products (name -> id) and Config.PassInfo/ProductInfo (display rows).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local UI = require(script.Parent.UI)
+
+local ShopUI = {}
+
+function ShopUI.Buyer(config, toast: (string, Color3?) -> ())
+	local player = Players.LocalPlayer
+	local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+	return function(kind: string, key: string)
+		if kind == "Pass" and player:GetAttribute("Pass_" .. key) then
+			return
+		end
+		local id = if kind == "Pass" then config.Passes[key] else config.Products[key]
+		if id and id > 0 then
+			if kind == "Pass" then
+				MarketplaceService:PromptGamePassPurchase(player, id)
+			else
+				MarketplaceService:PromptProductPurchase(player, id)
+			end
+		elseif RunService:IsStudio() then
+			testPurchase:FireServer(kind, key)
+			toast("[Studio test] granted " .. key, Color3.fromRGB(255, 215, 0))
+		else
+			toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+		end
+	end
+end
+
+-- Returns the (hidden) shop frame; toggle its Visible to open it.
+function ShopUI.Create(gui: ScreenGui, config, buy: (string, string) -> (), theme: Color3?): Frame
+	local player = Players.LocalPlayer
+	local bg = theme or Color3.fromRGB(40, 40, 60)
+	local frame = UI.new("Frame", {
+		Name = "Shop",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, 520, 0.7, 0),
+		BackgroundColor3 = bg,
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 560)
+	c.Parent = frame
+	UI.Label("SHOP", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame }).Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		Parent = frame,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
+
+	local order = 0
+	local function item(info, kind: string)
+		order += 1
+		local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12), LayoutOrder = order, Parent = list }, { UI.Corner(12) })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(215, 215, 230), Parent = row })
+		local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(120, 52),
+			Parent = row,
+		})
+		if kind == "Pass" then
+			local function owned()
+				if player:GetAttribute("Pass_" .. info.Key) then
+					b.Text = "OWNED"
+					b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+				end
+			end
+			player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+			owned()
+		end
+		b.Activated:Connect(function()
+			buy(kind, info.Key)
+		end)
+	end
+	for _, info in config.ProductInfo do
+		item(info, "Product")
+	end
+	for _, info in config.PassInfo do
+		item(info, "Pass")
+	end
+	return frame
+end
+
+-- Gold [VIP] chat tag for players owning the given pass.
+function ShopUI.VIPChatTag(passKey: string)
+	local TextChatService = game:GetService("TextChatService")
+	TextChatService.OnIncomingMessage = function(message)
+		local props = Instance.new("TextChatMessageProperties")
+		local source = message.TextSource
+		local speaker = source and Players:GetPlayerByUserId(source.UserId)
+		if speaker and speaker:GetAttribute("Pass_" .. passKey) then
+			props.PrefixText = "<font color='#FFD700'>[VIP]</font> " .. message.PrefixText
+		end
+		return props
+	end
+end
+
+-- Column of big buttons on the left edge.
+function ShopUI.SideBar(gui: ScreenGui): Frame
+	local side = UI.new("Frame", {
+		Name = "SideBar",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(130, 330),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}) :: Frame
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = side
+	return side
+end
+
+return ShopUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Survive Tung Tung Sahur. Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	Speed = 0,
+	DoubleCoins = 0,
+	VIP = 0,
+	StartShield = 0,
+}
+Config.PassInfo = {
+	{ Key = "Speed", Name = "Speedy Legs", Price = 149, Description = "Run 20% faster every round" },
+	{ Key = "DoubleCoins", Name = "2x Coins", Price = 149, Description = "Double coins from surviving" },
+	{ Key = "VIP", Name = "VIP", Price = 249, Description = "+50% coins, VIP tag, gold trail" },
+	{ Key = "StartShield", Name = "Free Shield", Price = 199, Description = "Start every round with a shield" },
+}
+Config.Products = {
+	Revive = 0,
+	SlowSahur = 0,
+	ExtraSahur = 0,
+	Coins = 0,
+}
+Config.ProductInfo = {
+	{ Key = "Revive", Name = "Revive", Price = 25, Description = "Come back to life this round!" },
+	{ Key = "SlowSahur", Name = "Slow Sahur", Price = 39, Description = "Every Sahur moves at half speed for 15s" },
+	{ Key = "ExtraSahur", Name = "Spawn Extra Sahur", Price = 49, Description = "Chaos! Another Sahur joins the hunt" },
+	{ Key = "Coins", Name = "Coin Bag", Price = 49, Description = "+500 coins" },
+}
+
+Config.Intermission = 15
+Config.RoundTime = 120
+Config.MinPlayers = 1
+Config.SurviveCoins = 50
+Config.CoinPerSecondAlive = 1
+Config.PlayerSpeed = 16
+Config.SahurSpeed = 15
+Config.SahurSpeedGain = 0.06 -- per second of round
+Config.SahurMaxSpeed = 24
+Config.KillRange = 4.5
+Config.ExtraSahurAt = { 50, 90 }
+
+-- Coin shop consumables
+Config.ShieldCost = 150
+Config.SpeedPotionCost = 100
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="11">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">Arena</string>
+          <string name="Source"><![CDATA[-- Builds the lobby and a village arena with walls to dodge around.
+local Arena = {}
+
+Arena.Size = 220
+Arena.Center = Vector3.new(0, 0, 400)
+Arena.LobbySpawn = CFrame.new(0, 4, 0)
+
+local function part(props, parent): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	p.Parent = parent
+	return p
+end
+
+function Arena.Build()
+	local folder = Instance.new("Folder")
+	folder.Name = "Map"
+	folder.Parent = workspace
+	local rng = Random.new(42)
+
+	-- Lobby
+	part({ Name = "LobbyFloor", Size = Vector3.new(80, 2, 80), Position = Vector3.new(0, -1, 0), Color = Color3.fromRGB(230, 230, 240), Material = Enum.Material.Marble }, folder)
+	for _, s in { { 40, 0, 1, 80 }, { -40, 0, 1, 80 }, { 0, 40, 80, 1 }, { 0, -40, 80, 1 } } do
+		part({ Size = Vector3.new(s[3], 14, s[4]), Position = Vector3.new(s[1], 7, s[2]), Color = Color3.fromRGB(120, 90, 200), Transparency = 0.3 }, folder)
+	end
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = Vector3.new(0, 0.5, 0)
+	spawn.Neutral = true
+	spawn.Color = Color3.fromRGB(255, 200, 80)
+	spawn.Parent = folder
+
+	-- Arena floor + boundary walls (night village)
+	local c = Arena.Center
+	local s = Arena.Size
+	part({ Name = "ArenaFloor", Size = Vector3.new(s, 2, s), Position = c - Vector3.new(0, 1, 0), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Grass }, folder)
+	for _, side in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+		part({
+			Size = if side[1] ~= 0 then Vector3.new(2, 30, s) else Vector3.new(s, 30, 2),
+			Position = c + Vector3.new(side[1] * s / 2, 15, side[2] * s / 2),
+			Color = Color3.fromRGB(40, 30, 30),
+			Transparency = 0.6,
+		}, folder)
+	end
+
+	-- Houses and walls in a loose grid so there's room to run around them.
+	local spawnPoints = {}
+	for gx = -4, 4 do
+		for gz = -4, 4 do
+			local pos = c + Vector3.new(gx * 24, 0, gz * 24)
+			if math.abs(gx) <= 1 and math.abs(gz) <= 1 then
+				continue -- open plaza in the middle where Sahur spawns
+			end
+			local roll = rng:NextNumber()
+			if roll < 0.35 then
+				local w, d = rng:NextInteger(8, 14), rng:NextInteger(8, 14)
+				local h = rng:NextInteger(9, 14)
+				local color = Color3.fromHSV(rng:NextNumber(), 0.35, 0.85)
+				part({ Size = Vector3.new(w, h, d), Position = pos + Vector3.new(0, h / 2, 0), Color = color, Material = Enum.Material.Brick }, folder)
+				local roof = part({ Size = Vector3.new(w + 2, 2, d + 2), Position = pos + Vector3.new(0, h + 1, 0), Color = Color3.fromRGB(120, 40, 30) }, folder)
+				roof.Material = Enum.Material.Slate
+			elseif roll < 0.55 then
+				local horizontal = rng:NextNumber() < 0.5
+				part({
+					Size = if horizontal then Vector3.new(18, 7, 2) else Vector3.new(2, 7, 18),
+					Position = pos + Vector3.new(0, 3.5, 0),
+					Color = Color3.fromRGB(150, 150, 150),
+					Material = Enum.Material.Cobblestone,
+				}, folder)
+				table.insert(spawnPoints, pos + Vector3.new(if horizontal then 0 else 5, 3, if horizontal then 5 else 0))
+			else
+				table.insert(spawnPoints, pos + Vector3.new(0, 3, 0))
+			end
+		end
+	end
+
+	-- Street lamps for atmosphere
+	for i = 1, 16 do
+		local angle = i / 16 * math.pi * 2
+		local pos = c + Vector3.new(math.cos(angle) * 30, 0, math.sin(angle) * 30)
+		part({ Size = Vector3.new(0.6, 10, 0.6), Position = pos + Vector3.new(0, 5, 0), Color = Color3.fromRGB(30, 30, 30) }, folder)
+		local bulb = part({ Size = Vector3.new(1.5, 1.5, 1.5), Position = pos + Vector3.new(0, 10.5, 0), Color = Color3.fromRGB(255, 220, 140), Material = Enum.Material.Neon }, folder)
+		local light = Instance.new("PointLight")
+		light.Range = 24
+		light.Brightness = 2
+		light.Color = Color3.fromRGB(255, 200, 120)
+		light.Parent = bulb
+	end
+	return spawnPoints
+end
+
+-- Cartoon Tung Tung Sahur: tall log body, angry eyes, a bat. Uses a Humanoid so it can path.
+function Arena.MakeSahur(position: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "TungTungSahur"
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(3, 9, 3)
+	root.Color = Color3.fromRGB(170, 115, 60)
+	root.Material = Enum.Material.Wood
+	root.CFrame = CFrame.new(position + Vector3.new(0, 7, 0))
+	root.Parent = model
+	model.PrimaryPart = root
+	local function attach(props)
+		local p = Instance.new("Part")
+		p.CanCollide = false
+		p.Massless = true
+		for k, v in props do
+			(p :: any)[k] = v
+		end
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = p
+		w.Parent = p
+		p.Parent = model
+		return p
+	end
+	for _, side in { -1, 1 } do
+		attach({ Shape = Enum.PartType.Ball, Size = Vector3.one * 1.2, Color = Color3.new(1, 1, 1), CFrame = root.CFrame * CFrame.new(side * 0.7, 2.6, -1.5) })
+		attach({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6, Color = Color3.new(0, 0, 0), CFrame = root.CFrame * CFrame.new(side * 0.7, 2.6, -2.05) })
+		attach({ Size = Vector3.new(1.2, 0.25, 0.2), Color = Color3.new(0, 0, 0), CFrame = root.CFrame * CFrame.new(side * 0.7, 3.4, -1.6) * CFrame.Angles(0, 0, math.rad(side * -20)) })
+		attach({ Size = Vector3.new(0.8, 3, 0.8), Color = Color3.fromRGB(140, 95, 50), CFrame = root.CFrame * CFrame.new(side * 0.8, -5.5, 0) })
+	end
+	attach({ Size = Vector3.new(1.6, 0.3, 0.2), Color = Color3.fromRGB(90, 0, 0), CFrame = root.CFrame * CFrame.new(0, 1.4, -1.55) })
+	attach({ Size = Vector3.new(0.7, 6, 0.7), Color = Color3.fromRGB(110, 70, 30), Material = Enum.Material.Wood, CFrame = root.CFrame * CFrame.new(2.2, 1, -1) * CFrame.Angles(math.rad(-30), 0, 0) })
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.HipHeight = 2.5 -- legs are 2.5 studs below the root's bottom
+	humanoid.WalkSpeed = 16
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.RequiresNeck = false
+	humanoid.BreakJointsOnDeath = false
+	humanoid.MaxHealth = 1e9
+	humanoid.Health = 1e9
+	humanoid.Parent = model
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(200, 40)
+	gui.StudsOffset = Vector3.new(0, 7, 0)
+	gui.Parent = root
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 60, 60)
+	label.Text = "TUNG TUNG TUNG SAHUR"
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = label
+	label.Parent = gui
+
+	local sound = Instance.new("Sound")
+	sound.Name = "Footsteps"
+	sound.SoundId = "rbxasset://sounds/action_footsteps_plastic.mp3"
+	sound.Looped = true
+	sound.RollOffMaxDistance = 80
+	sound.Volume = 1
+	sound.Parent = root
+	return model
+end
+
+return Arena
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="13">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Survive Tung Tung Sahur server: intermission -> round -> rewards loop.
+local Lighting = game:GetService("Lighting")
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+local Arena = require(script.Parent.Arena)
+
+Lighting.ClockTime = 0
+Lighting.Brightness = 1
+Lighting.OutdoorAmbient = Color3.fromRGB(70, 70, 110)
+Lighting.FogEnd = 260
+Lighting.FogColor = Color3.fromRGB(20, 20, 40)
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local BuyItemRemote = remote("RemoteFunction", "BuyItem")
+local UsePotionRemote = remote("RemoteFunction", "UsePotion")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+local spawnPoints = Arena.Build()
+local sahurFolder = Instance.new("Folder")
+sahurFolder.Name = "Sahurs"
+sahurFolder.Parent = workspace
+
+local roundActive = false
+local roundStart = 0
+local slowUntil = 0
+local queuedSahurs = 0
+local sahurs = {}
+local potionUntil: { [Player]: number } = {}
+
+---------------------------------------------------------------- helpers
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	player:SetAttribute("Coins", data.Coins)
+	player:SetAttribute("Wins", data.Wins)
+	player:SetAttribute("Shields", data.Shields)
+	player:SetAttribute("Potions", data.Potions)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Wins.Value = data.Wins
+		stats.Coins.Value = data.Coins
+	end
+end
+
+local function coinMultiplier(player: Player): number
+	local m = 1
+	if MonetizationService.OwnsPass(player, "DoubleCoins") then
+		m *= 2
+	end
+	if MonetizationService.OwnsPass(player, "VIP") then
+		m *= 1.5
+	end
+	return m
+end
+
+local function addCoins(player: Player, amount: number)
+	local data = DataService.Get(player)
+	if data then
+		data.Coins += math.floor(amount)
+		sync(player)
+	end
+end
+
+local function rootOf(player: Player): BasePart?
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function applySpeed(player: Player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	local speed = Config.PlayerSpeed
+	if MonetizationService.OwnsPass(player, "Speed") then
+		speed *= 1.2
+	end
+	if (potionUntil[player] or 0) > os.clock() then
+		speed *= 1.3
+	end
+	humanoid.WalkSpeed = speed
+end
+
+local function randomArenaSpawn(): CFrame
+	return CFrame.new(spawnPoints[math.random(1, #spawnPoints)])
+end
+
+local function alivePlayers(): { Player }
+	local list = {}
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("Alive") and rootOf(player) then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function addVIPTrail(player: Player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root or root:FindFirstChild("VIPTrail") then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = root
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1, 0)
+	a1.Parent = root
+	local trail = Instance.new("Trail")
+	trail.Name = "VIPTrail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Color = ColorSequence.new(Color3.fromRGB(255, 215, 0))
+	trail.LightEmission = 1
+	trail.Lifetime = 0.5
+	trail.Parent = root
+end
+
+---------------------------------------------------------------- sahur AI
+
+local function spawnSahur()
+	local offset = Vector3.new(math.random(-10, 10), 0, math.random(-10, 10))
+	local model = Arena.MakeSahur(Arena.Center + offset)
+	model.Parent = sahurFolder
+	model.PrimaryPart:SetNetworkOwner(nil)
+	local sound = model.PrimaryPart:FindFirstChild("Footsteps") :: Sound?
+	if sound then
+		sound:Play()
+	end
+	local entry = {
+		Model = model,
+		Humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid,
+		Root = model.PrimaryPart :: BasePart,
+		Waypoints = nil,
+		WaypointIndex = 0,
+		NextPath = 0,
+		StunnedUntil = 0,
+	}
+	table.insert(sahurs, entry)
+	notify(nil, "TUNG TUNG TUNG SAHUR HAS ENTERED!", Color3.fromRGB(255, 60, 60))
+	return entry
+end
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function canSee(from: Vector3, to: BasePart): boolean
+	rayParams.FilterDescendantsInstances = { sahurFolder, to.Parent :: Instance }
+	return workspace:Raycast(from, to.Position - from, rayParams) == nil
+end
+
+local function updateSahur(s, now: number)
+	local elapsed = now - roundStart
+	local speed = math.min(Config.SahurMaxSpeed, Config.SahurSpeed + elapsed * Config.SahurSpeedGain)
+	if os.clock() < slowUntil then
+		speed *= 0.5
+	end
+	if os.clock() < s.StunnedUntil then
+		speed = 0
+	end
+	s.Humanoid.WalkSpeed = speed
+
+	-- Chase the closest living player.
+	local best, bestDist = nil, math.huge
+	for _, player in alivePlayers() do
+		local root = rootOf(player) :: BasePart
+		local d = (root.Position - s.Root.Position).Magnitude
+		if d < bestDist then
+			best, bestDist = root, d
+		end
+	end
+	if not best then
+		return
+	end
+	if bestDist < 45 and canSee(s.Root.Position, best) then
+		s.Waypoints = nil
+		s.Humanoid:MoveTo(best.Position)
+		return
+	end
+	if now >= s.NextPath then
+		s.NextPath = now + 0.8
+		local target = best.Position
+		task.spawn(function()
+			local path = PathfindingService:CreatePath({ AgentRadius = 2.5, AgentHeight = 10, AgentCanJump = false })
+			local ok = pcall(path.ComputeAsync, path, s.Root.Position, target)
+			if ok and path.Status == Enum.PathStatus.Success then
+				s.Waypoints = path:GetWaypoints()
+				s.WaypointIndex = 2
+			end
+		end)
+	end
+	local waypoints = s.Waypoints
+	if waypoints and waypoints[s.WaypointIndex] then
+		local wp = waypoints[s.WaypointIndex].Position
+		if (Vector3.new(wp.X, s.Root.Position.Y, wp.Z) - s.Root.Position).Magnitude < 4 then
+			s.WaypointIndex += 1
+		end
+		local next = waypoints[s.WaypointIndex]
+		if next then
+			s.Humanoid:MoveTo(next.Position)
+		end
+	else
+		s.Humanoid:MoveTo(best.Position)
+	end
+end
+
+local function eliminate(player: Player, sahur)
+	local data = DataService.Get(player)
+	if data and (data.Shields > 0 or player:GetAttribute("FreeShield")) then
+		if player:GetAttribute("FreeShield") then
+			player:SetAttribute("FreeShield", nil)
+		else
+			data.Shields -= 1
+		end
+		sync(player)
+		sahur.StunnedUntil = os.clock() + 2
+		local root = rootOf(player)
+		if root then
+			local away = (root.Position - sahur.Root.Position) * Vector3.new(1, 0, 1)
+			root.AssemblyLinearVelocity = (if away.Magnitude > 0 then away.Unit else Vector3.xAxis) * 90 + Vector3.new(0, 40, 0)
+		end
+		notify(player, "Your shield saved you! RUN!", Color3.fromRGB(120, 200, 255))
+		return
+	end
+	player:SetAttribute("Alive", false)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.Health = 0
+	end
+	notify(nil, player.DisplayName .. " got caught by Sahur!", Color3.fromRGB(255, 90, 90))
+	notify(player, "Caught! Buy a Revive to jump back in!", Color3.fromRGB(255, 200, 0))
+end
+
+---------------------------------------------------------------- round loop
+
+local function setState(state: string, timeLeft: number)
+	workspace:SetAttribute("State", state)
+	workspace:SetAttribute("TimeLeft", timeLeft)
+	workspace:SetAttribute("AliveCount", #alivePlayers())
+end
+
+local function endRound()
+	roundActive = false
+	local survivors = alivePlayers()
+	for _, player in survivors do
+		local data = DataService.Get(player)
+		if data then
+			data.Wins += 1
+			data.Survived += 1
+			addCoins(player, Config.SurviveCoins * coinMultiplier(player))
+		end
+	end
+	if #survivors > 0 then
+		local names = {}
+		for _, p in survivors do
+			table.insert(names, p.DisplayName)
+		end
+		notify(nil, "SURVIVORS: " .. table.concat(names, ", "), Color3.fromRGB(90, 255, 90))
+	else
+		notify(nil, "Sahur got everyone...", Color3.fromRGB(255, 90, 90))
+	end
+	for _, s in sahurs do
+		s.Model:Destroy()
+	end
+	table.clear(sahurs)
+	for _, player in Players:GetPlayers() do
+		player:SetAttribute("Alive", false)
+		player:SetAttribute("FreeShield", nil)
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root then
+			player.Character:PivotTo(Arena.LobbySpawn)
+		end
+	end
+end
+
+local function startRound()
+	roundActive = true
+	roundStart = os.clock()
+	slowUntil = 0
+	local participants = 0
+	for _, player in Players:GetPlayers() do
+		if DataService.Get(player) and rootOf(player) then
+			participants += 1
+			player:SetAttribute("Alive", true)
+			if MonetizationService.OwnsPass(player, "StartShield") then
+				player:SetAttribute("FreeShield", true)
+			end
+			player.Character:PivotTo(randomArenaSpawn())
+			applySpeed(player)
+		end
+	end
+	spawnSahur()
+	for _ = 1, queuedSahurs do
+		spawnSahur()
+	end
+	queuedSahurs = 0
+	return participants
+end
+
+task.spawn(function()
+	while true do
+		for t = Config.Intermission, 1, -1 do
+			setState("Intermission", t)
+			task.wait(1)
+		end
+		local ready = 0
+		for _, player in Players:GetPlayers() do
+			if DataService.Get(player) and rootOf(player) then
+				ready += 1
+			end
+		end
+		if ready < Config.MinPlayers then
+			continue
+		end
+		startRound()
+		local extraIndex = 1
+		local lastSecond = os.clock()
+		while true do
+			local now = os.clock()
+			local elapsed = now - roundStart
+			local left = Config.RoundTime - elapsed
+			setState("Round", math.ceil(left))
+			if left <= 0 or #alivePlayers() == 0 then
+				break
+			end
+			local nextExtra = Config.ExtraSahurAt[extraIndex]
+			if nextExtra and elapsed >= nextExtra then
+				extraIndex += 1
+				spawnSahur()
+			end
+			for _, s in sahurs do
+				updateSahur(s, now)
+				if now < s.StunnedUntil then
+					continue
+				end
+				for _, player in alivePlayers() do
+					local root = rootOf(player)
+					if root and (root.Position - s.Root.Position).Magnitude < Config.KillRange + 1.5 then
+						eliminate(player, s)
+					end
+				end
+			end
+			if now - lastSecond >= 1 then
+				lastSecond = now
+				for _, player in alivePlayers() do
+					addCoins(player, Config.CoinPerSecondAlive * coinMultiplier(player))
+					applySpeed(player)
+				end
+			end
+			task.wait(0.1)
+		end
+		endRound()
+		setState("Ended", 0)
+		task.wait(4)
+	end
+end)
+
+---------------------------------------------------------------- coin shop
+
+BuyItemRemote.OnServerInvoke = function(player, item)
+	local data = DataService.Get(player)
+	if not data then
+		return false, "Loading..."
+	end
+	local cost = if item == "Shield" then Config.ShieldCost elseif item == "Potion" then Config.SpeedPotionCost else nil
+	if not cost then
+		return false, "Unknown item"
+	end
+	if data.Coins < cost then
+		return false, "Need " .. cost .. " coins!"
+	end
+	data.Coins -= cost
+	if item == "Shield" then
+		data.Shields += 1
+	else
+		data.Potions += 1
+	end
+	sync(player)
+	return true, "Bought a " .. item .. "!"
+end
+
+UsePotionRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data or data.Potions <= 0 then
+		return false, "No potions! Buy one in the coin shop."
+	end
+	data.Potions -= 1
+	potionUntil[player] = os.clock() + 20
+	applySpeed(player)
+	sync(player)
+	task.delay(20.1, applySpeed, player)
+	return true, "SPEED BOOST for 20s!"
+end
+
+---------------------------------------------------------------- players
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	for _, name in { "Wins", "Coins" } do
+		local v = Instance.new("IntValue")
+		v.Name = name
+		v.Parent = stats
+	end
+	stats.Parent = player
+	sync(player)
+	local function onCharacter(character: Model)
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait()
+		if roundActive and player:GetAttribute("Alive") then
+			character:PivotTo(randomArenaSpawn())
+		end
+		applySpeed(player)
+		if MonetizationService.OwnsPass(player, "VIP") then
+			addVIPTrail(player)
+		end
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	potionUntil[player] = nil
+end)
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		Revive = function(player, data)
+			if roundActive and not player:GetAttribute("Alive") then
+				player:SetAttribute("Alive", true)
+				player:LoadCharacter()
+				notify(nil, player.DisplayName .. " REVIVED!", Color3.fromRGB(90, 255, 90))
+			else
+				-- Not dead in a round: give a shield so the purchase is never wasted.
+				data.Shields += 1
+				sync(player)
+				notify(player, "You weren't caught, so you got a Shield instead!", Color3.fromRGB(120, 200, 255))
+			end
+			return true
+		end,
+		SlowSahur = function(player)
+			slowUntil = math.max(slowUntil, os.clock()) + 15
+			notify(nil, player.DisplayName .. " SLOWED every Sahur for 15s!", Color3.fromRGB(120, 200, 255))
+			return true
+		end,
+		ExtraSahur = function(player)
+			if roundActive then
+				spawnSahur()
+			else
+				queuedSahurs += 1
+			end
+			notify(nil, player.DisplayName .. " unleashed ANOTHER SAHUR!", Color3.fromRGB(255, 60, 60))
+			return true
+		end,
+		Coins = function(player)
+			addCoins(player, 500)
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		if name == "VIP" then
+			addVIPTrail(player)
+		end
+		applySpeed(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+DataService.Init("SurviveSahur_v1", {
+	Coins = 0,
+	Wins = 0,
+	Survived = 0,
+	Shields = 0,
+	Potions = 0,
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="14">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="15">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="16">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="17">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Survive Tung Tung Sahur client: round HUD, revive button, coin shop, troll buttons, Robux shop.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local ShopUI = require(ReplicatedStorage.Common.ShopUI)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+local buy = ShopUI.Buyer(Config, toast)
+local shop = ShopUI.Create(gui, Config, buy, Color3.fromRGB(50, 30, 30))
+ShopUI.VIPChatTag("VIP")
+
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(380, 80),
+	BackgroundColor3 = Color3.fromRGB(30, 15, 15),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local stateLabel = UI.Label("Intermission", { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 2), Parent = top })
+local statsLabel = UI.Label("", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.fromOffset(5, 48), TextColor3 = Color3.fromRGB(255, 215, 0), Parent = top })
+
+local reviveButton = UI.Button("REVIVE  R$ 25", Color3.fromRGB(40, 200, 80), {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.62),
+	Size = UDim2.fromOffset(300, 90),
+	Visible = false,
+	Parent = gui,
+})
+reviveButton.Activated:Connect(function()
+	buy("Product", "Revive")
+end)
+
+local side = ShopUI.SideBar(gui)
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 52), Parent = side }).Activated:Connect(function()
+	shop.Visible = not shop.Visible
+end)
+local shieldButton = UI.Button("Shield (" .. Config.ShieldCost .. "c)", Color3.fromRGB(60, 120, 255), { Size = UDim2.fromOffset(130, 52), Parent = side })
+shieldButton.Activated:Connect(function()
+	local ok, msg = remotes.BuyItem:InvokeServer("Shield")
+	toast(msg, if ok then Color3.fromRGB(120, 200, 255) else Color3.fromRGB(255, 90, 90))
+end)
+local potionBuy = UI.Button("Potion (" .. Config.SpeedPotionCost .. "c)", Color3.fromRGB(150, 70, 255), { Size = UDim2.fromOffset(130, 52), Parent = side })
+potionBuy.Activated:Connect(function()
+	local ok, msg = remotes.BuyItem:InvokeServer("Potion")
+	toast(msg, if ok then Color3.fromRGB(200, 150, 255) else Color3.fromRGB(255, 90, 90))
+end)
+local potionUse = UI.Button("USE POTION", Color3.fromRGB(255, 120, 0), { Size = UDim2.fromOffset(130, 52), Parent = side })
+potionUse.Activated:Connect(function()
+	local ok, msg = remotes.UsePotion:InvokeServer()
+	toast(msg, if ok then Color3.fromRGB(255, 200, 80) else Color3.fromRGB(255, 90, 90))
+end)
+
+-- Troll / help buttons on the right
+local right = UI.new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(150, 130), BackgroundTransparency = 1, Parent = gui })
+local rightLayout = Instance.new("UIListLayout")
+rightLayout.Padding = UDim.new(0, 10)
+rightLayout.Parent = right
+UI.Button("SLOW SAHUR", Color3.fromRGB(60, 160, 255), { Size = UDim2.fromOffset(150, 56), Parent = right }).Activated:Connect(function()
+	buy("Product", "SlowSahur")
+end)
+UI.Button("+1 SAHUR 😈", Color3.fromRGB(220, 40, 40), { Size = UDim2.fromOffset(150, 56), Parent = right }).Activated:Connect(function()
+	buy("Product", "ExtraSahur")
+end)
+
+local function refresh()
+	statsLabel.Text = string.format(
+		"%s coins  •  %d wins  •  🛡 %d  •  ⚡ %d",
+		Format.Abbreviate(player:GetAttribute("Coins") or 0),
+		player:GetAttribute("Wins") or 0,
+		(player:GetAttribute("Shields") or 0) + (if player:GetAttribute("FreeShield") then 1 else 0),
+		player:GetAttribute("Potions") or 0
+	)
+end
+player.AttributeChanged:Connect(refresh)
+refresh()
+
+task.spawn(function()
+	while true do
+		local state = workspace:GetAttribute("State")
+		local t = workspace:GetAttribute("TimeLeft") or 0
+		if state == "Round" then
+			stateLabel.Text = "SURVIVE! " .. Format.Time(t) .. "  •  " .. (workspace:GetAttribute("AliveCount") or 0) .. " alive"
+			stateLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+		elseif state == "Intermission" then
+			stateLabel.Text = "Next round in " .. t
+			stateLabel.TextColor3 = Color3.new(1, 1, 1)
+		else
+			stateLabel.Text = "Round over!"
+			stateLabel.TextColor3 = Color3.new(1, 1, 1)
+		end
+		reviveButton.Visible = state == "Round" and not player:GetAttribute("Alive")
+		task.wait(0.25)
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
