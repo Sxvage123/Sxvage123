@@ -1,0 +1,1395 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">ShopUI</string>
+          <string name="Source"><![CDATA[-- Shared Robux shop window + purchase helper used by every game's client.
+-- Expects Config.Passes/Products (name -> id) and Config.PassInfo/ProductInfo (display rows).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local UI = require(script.Parent.UI)
+
+local ShopUI = {}
+
+function ShopUI.Buyer(config, toast: (string, Color3?) -> ())
+	local player = Players.LocalPlayer
+	local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+	return function(kind: string, key: string)
+		if kind == "Pass" and player:GetAttribute("Pass_" .. key) then
+			return
+		end
+		local id = if kind == "Pass" then config.Passes[key] else config.Products[key]
+		if id and id > 0 then
+			if kind == "Pass" then
+				MarketplaceService:PromptGamePassPurchase(player, id)
+			else
+				MarketplaceService:PromptProductPurchase(player, id)
+			end
+		elseif RunService:IsStudio() then
+			testPurchase:FireServer(kind, key)
+			toast("[Studio test] granted " .. key, Color3.fromRGB(255, 215, 0))
+		else
+			toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+		end
+	end
+end
+
+-- Returns the (hidden) shop frame; toggle its Visible to open it.
+function ShopUI.Create(gui: ScreenGui, config, buy: (string, string) -> (), theme: Color3?): Frame
+	local player = Players.LocalPlayer
+	local bg = theme or Color3.fromRGB(40, 40, 60)
+	local frame = UI.new("Frame", {
+		Name = "Shop",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(0, 520, 0.7, 0),
+		BackgroundColor3 = bg,
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+	local c = Instance.new("UISizeConstraint")
+	c.MaxSize = Vector2.new(math.huge, 560)
+	c.Parent = frame
+	UI.Label("SHOP", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = frame }).Activated:Connect(function()
+		frame.Visible = false
+	end)
+	local list = UI.new("ScrollingFrame", {
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.new(1, -24, 1, -76),
+		BackgroundTransparency = 1,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollBarThickness = 8,
+		Parent = frame,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = list
+
+	local order = 0
+	local function item(info, kind: string)
+		order += 1
+		local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12), LayoutOrder = order, Parent = list }, { UI.Corner(12) })
+		UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+		UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(215, 215, 230), Parent = row })
+		local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(120, 52),
+			Parent = row,
+		})
+		if kind == "Pass" then
+			local function owned()
+				if player:GetAttribute("Pass_" .. info.Key) then
+					b.Text = "OWNED"
+					b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+				end
+			end
+			player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+			owned()
+		end
+		b.Activated:Connect(function()
+			buy(kind, info.Key)
+		end)
+	end
+	for _, info in config.ProductInfo do
+		item(info, "Product")
+	end
+	for _, info in config.PassInfo do
+		item(info, "Pass")
+	end
+	return frame
+end
+
+-- Gold [VIP] chat tag for players owning the given pass.
+function ShopUI.VIPChatTag(passKey: string)
+	local TextChatService = game:GetService("TextChatService")
+	TextChatService.OnIncomingMessage = function(message)
+		local props = Instance.new("TextChatMessageProperties")
+		local source = message.TextSource
+		local speaker = source and Players:GetPlayerByUserId(source.UserId)
+		if speaker and speaker:GetAttribute("Pass_" .. passKey) then
+			props.PrefixText = "<font color='#FFD700'>[VIP]</font> " .. message.PrefixText
+		end
+		return props
+	end
+end
+
+-- Column of big buttons on the left edge.
+function ShopUI.SideBar(gui: ScreenGui): Frame
+	local side = UI.new("Frame", {
+		Name = "SideBar",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(130, 330),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}) :: Frame
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = side
+	return side
+end
+
+return ShopUI
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Merge Brainrots: buy, merge two of the same level into the next, earn idle cash.
+-- Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	DoubleCash = 0,
+	AutoMerge = 0,
+	MoreSlots = 0,
+	FastDrops = 0,
+}
+Config.PassInfo = {
+	{ Key = "DoubleCash", Name = "2x Cash", Price = 199, Description = "Double all income forever" },
+	{ Key = "AutoMerge", Name = "Auto Merge", Price = 249, Description = "Merges matching brainrots for you" },
+	{ Key = "MoreSlots", Name = "+10 Slots", Price = 149, Description = "A bigger board for more brainrots" },
+	{ Key = "FastDrops", Name = "Fast Drops", Price = 149, Description = "Free brainrots drop 2x as often" },
+}
+Config.Products = {
+	CashPack = 0,
+	LevelUp = 0,
+	MegaDrop = 0,
+}
+Config.ProductInfo = {
+	{ Key = "CashPack", Name = "Cash Pile", Price = 29, Description = "1 hour of income instantly" },
+	{ Key = "LevelUp", Name = "Level Up All", Price = 99, Description = "Every brainrot on your board +1 level" },
+	{ Key = "MegaDrop", Name = "Mega Drop", Price = 49, Description = "Drops a brainrot 3 levels above your best buy" },
+}
+
+Config.BaseSlots = 20
+Config.ExtraSlots = 10
+Config.DropEvery = 15
+Config.BaseBuyCost = 10
+Config.BuyCostGrowth = 1.03
+Config.IncomeGrowth = 2.15
+Config.CostLevelFactor = 2.6
+Config.OfflineCap = 3 * 3600
+Config.OfflineRate = 0.5
+Config.RebirthLevel = 20
+Config.RebirthBonus = 0.5
+
+Config.Names = {
+	"Noobini", "Pizzanini", "Tim Cheese", "Lirili Larila", "Fluriflura", "Talpa di Fero", "Svinina", "Pipi Kiwi",
+	"Trippi Troppi", "Tung Tung Sahur", "Gangster Footera", "Brr Brr Patapim", "Chimpanzini", "Ballerina Cappuccina",
+	"Cappuccino Assassino", "Frigo Camelo", "Bombardiro Crocodilo", "Orangutini", "Cocofanto", "Tralalero Tralala",
+	"Odin Din Din Dun", "La Vacca Saturno", "Garama", "Skibidi Overlord", "Rizzler Supreme", "Gyatt Emperor",
+	"Ohio Final Boss", "Sigma Deity", "Brainrot Singularity", "THE ULTIMATE BRAINROT",
+}
+Config.MaxLevel = #Config.Names
+
+function Config.Income(level: number): number
+	return math.floor(Config.IncomeGrowth ^ (level - 1))
+end
+
+function Config.Color(level: number): Color3
+	return Color3.fromHSV(((level - 1) * 0.083) % 1, 0.65, 1)
+end
+
+-- Highest level you can buy directly grows with your best brainrot.
+function Config.BuyLevel(best: number): number
+	return math.max(1, best - 4)
+end
+
+function Config.BuyCost(level: number, purchases: number): number
+	return math.floor(Config.BaseBuyCost * Config.CostLevelFactor ^ (level - 1) * Config.BuyCostGrowth ^ purchases)
+end
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		-- Already applied in memory; only confirm once it's actually saved
+		-- (an earlier save may have failed).
+		if DataService.Save(player, false) then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="11">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="Script" referent="12">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Merge Brainrots server: board state, buying, merging, drops, idle income, rebirths.
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+
+Lighting.ClockTime = 14
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local BoardRemote = remote("RemoteEvent", "Board")
+local BuyRemote = remote("RemoteFunction", "Buy")
+local MoveRemote = remote("RemoteFunction", "Move")
+local RebirthRemote = remote("RemoteFunction", "Rebirth")
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+-- A simple lobby so players can see each other.
+do
+	local floor = Instance.new("Part")
+	floor.Anchored = true
+	floor.Size = Vector3.new(120, 2, 120)
+	floor.Position = Vector3.new(0, -1, 0)
+	floor.Color = Color3.fromRGB(120, 200, 255)
+	floor.Material = Enum.Material.SmoothPlastic
+	floor.Parent = workspace
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(10, 1, 10)
+	spawn.Position = Vector3.new(0, 0.5, 0)
+	spawn.Neutral = true
+	spawn.Parent = workspace
+end
+
+local function slots(player: Player): number
+	return Config.BaseSlots + (if MonetizationService.OwnsPass(player, "MoreSlots") then Config.ExtraSlots else 0)
+end
+
+local function multiplier(player: Player, data): number
+	local m = 1 + data.Rebirths * Config.RebirthBonus
+	if MonetizationService.OwnsPass(player, "DoubleCash") then
+		m *= 2
+	end
+	return m
+end
+
+local function income(player: Player, data): number
+	local total = 0
+	for i = 1, slots(player) do
+		local level = data.Board[i] or 0
+		if level > 0 then
+			total += Config.Income(level)
+		end
+	end
+	return total * multiplier(player, data)
+end
+
+local function best(data): number
+	local b = data.Best
+	for _, level in data.Board do
+		b = math.max(b, level)
+	end
+	return b
+end
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	data.Best = best(data)
+	local buyLevel = Config.BuyLevel(data.Best)
+	player:SetAttribute("Cash", data.Cash)
+	player:SetAttribute("Income", income(player, data))
+	player:SetAttribute("Best", data.Best)
+	player:SetAttribute("BuyLevel", buyLevel)
+	player:SetAttribute("BuyCost", Config.BuyCost(buyLevel, data.Purchases))
+	player:SetAttribute("Rebirths", data.Rebirths)
+	player:SetAttribute("Slots", slots(player))
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Cash.Value = Format.Cash(data.Cash)
+		stats.Best.Value = data.Best
+	end
+	-- Show your best brainrot over your head.
+	local head = player.Character and player.Character:FindFirstChild("Head")
+	if head then
+		local tag = head:FindFirstChild("BestTag") :: BillboardGui?
+		if not tag then
+			local newTag = Instance.new("BillboardGui")
+			newTag.Name = "BestTag"
+			newTag.Size = UDim2.fromOffset(200, 30)
+			newTag.StudsOffset = Vector3.new(0, 2.5, 0)
+			newTag.MaxDistance = 60
+			local label = Instance.new("TextLabel")
+			label.Name = "Label"
+			label.BackgroundTransparency = 1
+			label.Size = UDim2.fromScale(1, 1)
+			label.Font = Enum.Font.FredokaOne
+			label.TextScaled = true
+			local stroke = Instance.new("UIStroke")
+			stroke.Thickness = 2
+			stroke.Parent = label
+			label.Parent = newTag
+			newTag.Parent = head
+			tag = newTag
+		end
+		local label = (tag :: BillboardGui):FindFirstChild("Label") :: TextLabel
+		label.Text = "Lv" .. data.Best .. " " .. (Config.Names[data.Best] or "")
+		label.TextColor3 = Config.Color(math.max(1, data.Best))
+	end
+end
+
+local function sendBoard(player: Player)
+	local data = DataService.Get(player)
+	if data then
+		BoardRemote:FireClient(player, data.Board)
+	end
+	sync(player)
+end
+
+local function emptySlot(player: Player, data): number?
+	for i = 1, slots(player) do
+		if (data.Board[i] or 0) == 0 then
+			return i
+		end
+	end
+	return nil
+end
+
+local function place(player: Player, data, level: number): boolean
+	local slot = emptySlot(player, data)
+	if not slot then
+		return false
+	end
+	data.Board[slot] = math.min(level, Config.MaxLevel)
+	return true
+end
+
+local function announceIfNew(player: Player, data, level: number)
+	if level > data.Best then
+		data.Best = level
+		if level >= 10 then
+			notify(nil, player.DisplayName .. " unlocked Lv" .. level .. " " .. Config.Names[level] .. "!", Config.Color(level))
+		else
+			notify(player, "NEW: " .. Config.Names[level] .. "!", Config.Color(level))
+		end
+	end
+end
+
+BuyRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data then
+		return false, "Loading..."
+	end
+	local level = Config.BuyLevel(best(data))
+	local cost = Config.BuyCost(level, data.Purchases)
+	if data.Cash < cost then
+		return false, "Need " .. Format.Cash(cost) .. "!"
+	end
+	if not emptySlot(player, data) then
+		return false, "Board full! Merge some brainrots."
+	end
+	data.Cash -= cost
+	data.Purchases += 1
+	place(player, data, level)
+	sendBoard(player)
+	return true
+end
+
+-- Move from slot a to slot b: merge if same level, swap otherwise.
+local function move(player: Player, data, a: number, b: number): (boolean, string?)
+	local limit = slots(player)
+	if a == b or a < 1 or b < 1 or a > limit or b > limit then
+		return false
+	end
+	local la, lb = data.Board[a] or 0, data.Board[b] or 0
+	if la == 0 then
+		return false
+	end
+	if la == lb and la < Config.MaxLevel then
+		data.Board[a] = 0
+		data.Board[b] = la + 1
+		data.Merges += 1
+		announceIfNew(player, data, la + 1)
+		return true, "merged"
+	end
+	data.Board[a], data.Board[b] = lb, la
+	return true, "moved"
+end
+
+MoveRemote.OnServerInvoke = function(player, a, b)
+	local data = DataService.Get(player)
+	if not data or type(a) ~= "number" or type(b) ~= "number" or a % 1 ~= 0 or b % 1 ~= 0 then
+		return false
+	end
+	local ok, kind = move(player, data, a, b)
+	if ok then
+		sendBoard(player)
+	end
+	return ok, kind
+end
+
+RebirthRemote.OnServerInvoke = function(player)
+	local data = DataService.Get(player)
+	if not data then
+		return false, "Loading..."
+	end
+	if best(data) < Config.RebirthLevel then
+		return false, "Reach Lv" .. Config.RebirthLevel .. " (" .. Config.Names[Config.RebirthLevel] .. ") to rebirth!"
+	end
+	data.Rebirths += 1
+	data.Board = {}
+	data.Cash = 0
+	data.Purchases = 0
+	data.Best = 0
+	place(player, data, 1)
+	sendBoard(player)
+	notify(nil, player.DisplayName .. " rebirthed! (" .. data.Rebirths .. ")", Color3.fromRGB(255, 215, 0))
+	return true, "Rebirth! Now " .. (1 + data.Rebirths * Config.RebirthBonus) .. "x income."
+end
+
+---------------------------------------------------------------- loops
+
+local nextDrop: { [Player]: number } = {}
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local now = os.clock()
+		for _, player in Players:GetPlayers() do
+			local data = DataService.Get(player)
+			if not data then
+				continue
+			end
+			local earned = income(player, data)
+			data.Cash += earned
+			data.TotalEarned += earned
+			local changed = false
+			-- Free drops
+			local every = Config.DropEvery / (if MonetizationService.OwnsPass(player, "FastDrops") then 2 else 1)
+			if now >= (nextDrop[player] or 0) then
+				nextDrop[player] = now + every
+				if place(player, data, Config.BuyLevel(best(data))) then
+					changed = true
+				end
+			end
+			-- Auto merge (pass): merge one matching pair per tick.
+			if MonetizationService.OwnsPass(player, "AutoMerge") and player:GetAttribute("AutoMergeOn") ~= false then
+				local seen = {}
+				for i = 1, slots(player) do
+					local level = data.Board[i] or 0
+					if level > 0 and level < Config.MaxLevel then
+						if seen[level] then
+							move(player, data, seen[level], i)
+							changed = true
+							break
+						end
+						seen[level] = i
+					end
+				end
+			end
+			if changed then
+				sendBoard(player)
+			else
+				sync(player)
+			end
+		end
+	end
+end)
+
+remote("RemoteEvent", "ToggleAutoMerge").OnServerEvent:Connect(function(player)
+	player:SetAttribute("AutoMergeOn", player:GetAttribute("AutoMergeOn") == false)
+end)
+
+---------------------------------------------------------------- players
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local cash = Instance.new("StringValue")
+	cash.Name = "Cash"
+	cash.Parent = stats
+	local bestValue = Instance.new("IntValue")
+	bestValue.Name = "Best"
+	bestValue.Parent = stats
+	stats.Parent = player
+	-- Board is stored as a dense array of levels (0 = empty).
+	for i = 1, Config.BaseSlots + Config.ExtraSlots do
+		data.Board[i] = data.Board[i] or 0
+	end
+	if data.LoginCount == 1 then
+		place(player, data, 1)
+		place(player, data, 1)
+	end
+	if data.LastSave > 0 then
+		local away = math.min(os.time() - data.LastSave, Config.OfflineCap)
+		local earned = math.floor(away * income(player, data) * Config.OfflineRate)
+		if earned > 0 then
+			data.Cash += earned
+			task.delay(3, notify, player, "Welcome back! You earned " .. Format.Cash(earned) .. " offline.", Color3.fromRGB(90, 255, 90))
+		end
+	end
+	sendBoard(player)
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Head", 10)
+		sync(player)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	nextDrop[player] = nil
+end)
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		CashPack = function(player, data)
+			local amount = math.max(1000, math.floor(income(player, data) * 3600))
+			data.Cash += amount
+			sync(player)
+			notify(player, "+" .. Format.Cash(amount) .. "!", Color3.fromRGB(90, 255, 90))
+			return true
+		end,
+		LevelUp = function(player, data)
+			local top = 0
+			for i, level in data.Board do
+				if level > 0 then
+					data.Board[i] = math.min(Config.MaxLevel, level + 1)
+					top = math.max(top, data.Board[i])
+				end
+			end
+			announceIfNew(player, data, top)
+			sendBoard(player)
+			notify(player, "Every brainrot leveled up!", Color3.fromRGB(255, 215, 0))
+			return true
+		end,
+		MegaDrop = function(player, data)
+			local level = math.min(Config.MaxLevel, Config.BuyLevel(best(data)) + 3)
+			if not place(player, data, level) then
+				-- Board full: overwrite the lowest slot so the purchase always lands.
+				local low, lowIndex = math.huge, 1
+				for i = 1, slots(player) do
+					if (data.Board[i] or 0) < low then
+						low, lowIndex = data.Board[i] or 0, i
+					end
+				end
+				data.Board[lowIndex] = level
+			end
+			announceIfNew(player, data, level)
+			sendBoard(player)
+			return true
+		end,
+	},
+	OnPassOwned = function(player, name)
+		sendBoard(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+DataService.Init("MergeBrainrots_v1", {
+	Cash = 0,
+	Board = {},
+	Purchases = 0,
+	Best = 0,
+	Merges = 0,
+	Rebirths = 0,
+	TotalEarned = 0,
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="13">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="14">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="15">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="16">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Merge Brainrots client: tap a brainrot, then tap another of the same level to merge.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Common.Format)
+local ShopUI = require(ReplicatedStorage.Common.ShopUI)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+local buy = ShopUI.Buyer(Config, toast)
+local shop = ShopUI.Create(gui, Config, buy, Color3.fromRGB(30, 45, 80))
+
+---------------------------------------------------------------- top bar
+
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(340, 74),
+	BackgroundColor3 = Color3.fromRGB(25, 30, 50),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local cashLabel = UI.Label("$0", { Size = UDim2.new(1, -10, 0, 42), Position = UDim2.fromOffset(5, 2), TextColor3 = Color3.fromRGB(120, 255, 120), Parent = top })
+local incomeLabel = UI.Label("", { Size = UDim2.new(1, -10, 0, 24), Position = UDim2.fromOffset(5, 46), Parent = top })
+
+---------------------------------------------------------------- board
+
+local boardFrame = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.52),
+	Size = UDim2.fromOffset(520, 510),
+	BackgroundColor3 = Color3.fromRGB(30, 40, 70),
+	BackgroundTransparency = 0.1,
+	Parent = gui,
+}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) })
+local scale = Instance.new("UIScale")
+scale.Parent = boardFrame
+local function rescale()
+	local cam = workspace.CurrentCamera
+	if cam then
+		local vp = cam.ViewportSize
+		scale.Scale = math.min(1, (vp.X - 40) / 520, (vp.Y - 200) / 510)
+	end
+end
+rescale()
+if workspace.CurrentCamera then
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+end
+
+local grid = UI.new("Frame", { Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 1, -20), BackgroundTransparency = 1, Parent = boardFrame })
+local layout = Instance.new("UIGridLayout")
+layout.CellSize = UDim2.fromOffset(94, 74)
+layout.CellPadding = UDim2.fromOffset(6, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = grid
+
+local board = {}
+local selected: number? = nil
+local cells = {}
+local TOTAL = Config.BaseSlots + Config.ExtraSlots
+
+local function render()
+	local unlocked = player:GetAttribute("Slots") or Config.BaseSlots
+	for i = 1, TOTAL do
+		local cell = cells[i]
+		local level = board[i] or 0
+		cell.Visible = i <= math.max(unlocked, Config.BaseSlots + Config.ExtraSlots)
+		local locked = i > unlocked
+		local stroke = cell:FindFirstChildOfClass("UIStroke") :: UIStroke
+		stroke.Color = if selected == i then Color3.fromRGB(255, 255, 255) else Color3.new(0, 0, 0)
+		stroke.Thickness = if selected == i then 4 else 2
+		local nameLabel = cell:FindFirstChild("NameLabel") :: TextLabel
+		local levelLabel = cell:FindFirstChild("LevelLabel") :: TextLabel
+		if locked then
+			cell.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+			nameLabel.Text = "🔒"
+			levelLabel.Text = "+10 Slots"
+		elseif level == 0 then
+			cell.BackgroundColor3 = Color3.fromRGB(45, 55, 85)
+			nameLabel.Text = ""
+			levelLabel.Text = ""
+		else
+			cell.BackgroundColor3 = Config.Color(level)
+			nameLabel.Text = Config.Names[level]
+			levelLabel.Text = "Lv" .. level .. "  " .. Format.Cash(Config.Income(level)) .. "/s"
+		end
+	end
+end
+
+for i = 1, TOTAL do
+	local cell = UI.new("TextButton", {
+		Text = "",
+		LayoutOrder = i,
+		AutoButtonColor = true,
+		BackgroundColor3 = Color3.fromRGB(45, 55, 85),
+		Parent = grid,
+	}, { UI.Corner(10), UI.Stroke(Color3.new(0, 0, 0), 2) }) :: TextButton
+	UI.Label("", { Name = "NameLabel", Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 40), TextWrapped = true, Parent = cell })
+	UI.Label("", { Name = "LevelLabel", Position = UDim2.new(0, 4, 1, -26), Size = UDim2.new(1, -8, 0, 22), TextColor3 = Color3.fromRGB(255, 255, 210), Parent = cell })
+	cells[i] = cell
+	cell.Activated:Connect(function()
+		if i > (player:GetAttribute("Slots") or Config.BaseSlots) then
+			buy("Pass", "MoreSlots")
+			return
+		end
+		if selected == nil then
+			if (board[i] or 0) > 0 then
+				selected = i
+				render()
+			end
+			return
+		end
+		local from = selected
+		selected = nil
+		if from ~= i then
+			local ok, kind = remotes.Move:InvokeServer(from, i)
+			if ok and kind == "merged" then
+				local pop = cells[i]
+				pop.Size = UDim2.fromOffset(110, 86)
+				TweenService:Create(pop, TweenInfo.new(0.2), { Size = UDim2.fromOffset(94, 74) }):Play()
+			end
+		end
+		render()
+	end)
+end
+
+remotes:WaitForChild("Board").OnClientEvent:Connect(function(b)
+	board = b
+	render()
+end)
+player:GetAttributeChangedSignal("Slots"):Connect(render)
+
+---------------------------------------------------------------- buttons
+
+local buyButton = UI.Button("BUY", Color3.fromRGB(40, 180, 70), {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -16),
+	Size = UDim2.fromOffset(300, 70),
+	Parent = gui,
+})
+buyButton.Activated:Connect(function()
+	local ok, msg = remotes.Buy:InvokeServer()
+	if not ok then
+		toast(msg, Color3.fromRGB(255, 90, 90))
+	end
+end)
+
+local function refresh()
+	cashLabel.Text = Format.Cash(player:GetAttribute("Cash") or 0)
+	incomeLabel.Text = Format.Cash(player:GetAttribute("Income") or 0) .. "/s  •  Rebirths " .. (player:GetAttribute("Rebirths") or 0)
+	local level = player:GetAttribute("BuyLevel") or 1
+	buyButton.Text = "BUY Lv" .. level .. "  " .. Format.Cash(player:GetAttribute("BuyCost") or 0)
+end
+player.AttributeChanged:Connect(refresh)
+refresh()
+
+local side = ShopUI.SideBar(gui)
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	shop.Visible = not shop.Visible
+end)
+UI.Button("REBIRTH", Color3.fromRGB(255, 170, 0), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	local ok, msg = remotes.Rebirth:InvokeServer()
+	toast(msg, if ok then Color3.fromRGB(255, 215, 0) else Color3.fromRGB(255, 90, 90))
+end)
+local autoButton = UI.Button("AUTO MERGE", Color3.fromRGB(150, 70, 255), { Size = UDim2.fromOffset(130, 54), Parent = side })
+autoButton.Activated:Connect(function()
+	if player:GetAttribute("Pass_AutoMerge") then
+		remotes.ToggleAutoMerge:FireServer()
+	else
+		buy("Pass", "AutoMerge")
+	end
+end)
+player:GetAttributeChangedSignal("AutoMergeOn"):Connect(function()
+	autoButton.Text = if player:GetAttribute("AutoMergeOn") == false then "AUTO: OFF" else "AUTO MERGE"
+end)
+UI.Button("LEVEL UP ALL", Color3.fromRGB(255, 80, 160), { Size = UDim2.fromOffset(130, 54), Parent = side }).Activated:Connect(function()
+	buy("Product", "LevelUp")
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>

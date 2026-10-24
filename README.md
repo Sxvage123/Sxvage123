@@ -16,6 +16,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Fish a Brainrot** | Fisch (fishing + reel minigame) | `build/FishABrainrot.rbxlx` |
 | **Brainrot Tower Defense** | Toilet Tower Defense (co-op waves + unit gacha) | `build/BrainrotTowerDefense.rbxlx` |
 | **Brainrot Ball** | Blade Ball (parry PvP + sword crates) | `build/BrainrotBall.rbxlx` |
+| **Merge Brainrots** | Idle merge games (mobile-friendly UI) | `build/MergeBrainrots.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
