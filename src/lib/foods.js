@@ -141,7 +141,7 @@ const RAW = {
     ['Pepperoni pizza', '1 slice (large)', 310, 13, 35, 13, 'pepperoni, pepperoni pizza'],
     ['Hamburger', '1 burger', 540, 30, 40, 29, 'burger, hamburger'],
     ['Cheeseburger', '1 burger', 600, 32, 40, 34, 'cheeseburger, cheese burger'],
-    ['Double cheeseburger', '1 burger', 800, 48, 42, 48, 'double cheeseburger, big mac'],
+    ['Double cheeseburger', '1 burger', 800, 48, 42, 48, 'double cheeseburger'],
     ['Veggie burger', '1 burger', 420, 20, 45, 17, 'veggie burger'],
     ['Hot dog', '1 hot dog', 290, 11, 24, 17, 'hot dog, hotdog, frankfurter, chili dog, corn dog'],
     ['Burrito', '1 burrito', 750, 35, 85, 28, 'burrito'],
@@ -194,6 +194,47 @@ const RAW = {
     ['Enchiladas', '2 enchiladas', 600, 30, 50, 30, 'enchilada'],
     ['Corn dog', '1 corn dog', 250, 8, 25, 13, 'corn dog'],
     ['Poutine', '1 serving', 740, 22, 75, 40, 'poutine'],
+  ],
+  'Restaurant favorites': [
+    ['Big Mac', '1 burger', 590, 25, 46, 34, 'big mac, mcdonalds burger'],
+    ['McChicken', '1 sandwich', 400, 14, 39, 21, 'mcchicken'],
+    ['Quarter Pounder with Cheese', '1 burger', 520, 30, 42, 26, 'quarter pounder'],
+    ['McDonald’s fries (medium)', 'medium', 320, 5, 43, 15, 'mcdonalds fries'],
+    ['Chicken McNuggets (10 pc)', '10 pieces', 410, 23, 25, 24, 'mcnuggets'],
+    ['Egg McMuffin', '1 sandwich', 310, 17, 30, 13, 'mcmuffin'],
+    ['Chick-fil-A Chicken Sandwich', '1 sandwich', 420, 29, 41, 18, 'chick fil a sandwich, chickfila'],
+    ['Chick-fil-A Nuggets (8 ct)', '8 pieces', 250, 27, 11, 11, 'chick fil a nuggets'],
+    ['Chick-fil-A Waffle Fries (medium)', 'medium', 420, 5, 45, 24, 'waffle fries'],
+    ['Chipotle chicken burrito', '1 burrito', 1000, 55, 110, 37, 'chipotle burrito'],
+    ['Chipotle chicken bowl', '1 bowl', 660, 50, 60, 23, 'chipotle bowl'],
+    ['Taco Bell Crunchwrap Supreme', '1 wrap', 530, 16, 71, 21, 'crunchwrap'],
+    ['Taco Bell Crunchy Taco', '1 taco', 170, 8, 13, 10, 'crunchy taco'],
+    ['Subway 6" turkey sub', '6 inch', 280, 18, 46, 4, 'subway turkey'],
+    ['Wendy’s Dave’s Single', '1 burger', 590, 29, 39, 34, 'daves single'],
+    ['Five Guys cheeseburger', '1 burger', 980, 47, 40, 69, 'five guys'],
+    ['In-N-Out Double-Double', '1 burger', 610, 37, 39, 34, 'double double, in n out'],
+    ['Popeyes chicken sandwich', '1 sandwich', 700, 28, 50, 42, 'popeyes'],
+    ['KFC Original Recipe breast', '1 piece', 390, 39, 11, 21, 'kfc'],
+    ['Domino’s pepperoni pizza (large slice)', '1 slice', 300, 12, 31, 14, 'dominos'],
+    ['Panda Express orange chicken', '1 entree', 490, 25, 51, 21, 'panda express'],
+    ['Starbucks grande caramel macchiato', '16 oz', 250, 10, 35, 7, 'caramel macchiato'],
+    ['Dunkin’ glazed donut', '1 donut', 240, 4, 33, 11, 'dunkin donut'],
+  ],
+  'Gym & meal prep': [
+    ['Chicken, rice & broccoli', '1 container', 520, 48, 55, 9, 'meal prep, chicken and rice'],
+    ['Steak & eggs', '1 plate', 620, 55, 2, 42, 'steak and eggs'],
+    ['Protein pancakes', '3 pancakes', 350, 30, 40, 7, 'protein pancake'],
+    ['Overnight protein oats', '1 jar', 420, 35, 50, 9, 'protein oats'],
+    ['Greek yogurt & berries', '1 bowl', 220, 20, 28, 2, 'yogurt bowl'],
+    ['Turkey & avocado wrap', '1 wrap', 450, 32, 38, 18, 'turkey wrap'],
+    ['Salmon, sweet potato & greens', '1 plate', 560, 40, 42, 24, 'salmon meal prep'],
+    ['Ground beef burrito bowl', '1 bowl', 680, 42, 62, 28, 'beef bowl'],
+    ['Tuna salad (light mayo)', '1 cup', 280, 30, 4, 15, 'tuna salad'],
+    ['Cottage cheese & pineapple', '1 bowl', 220, 25, 20, 4, 'cottage cheese bowl'],
+    ['Instant ramen', '1 pack', 380, 8, 52, 14, 'cup noodles, instant noodles, maruchan'],
+    ['Peanut butter banana smoothie', '16 oz', 450, 20, 55, 18, 'pb banana smoothie'],
+    ['Casein shake', '1 scoop + water', 120, 24, 4, 1, 'casein'],
+    ['Mass gainer shake', '1 serving', 650, 50, 85, 10, 'mass gainer, weight gainer'],
   ],
   'Soups': [
     ['Chicken noodle soup', '1 bowl', 160, 12, 18, 4, 'chicken soup, chicken noodle'],
@@ -400,7 +441,8 @@ export function foodForLabel(label) {
   let bestScore = 0;
   for (const p of PHRASES) {
     if (!p.w.every((w) => lw.includes(w))) continue;
-    const coverage = p.w.length / lw.length;
+    const coverage = new Set(p.w).size / new Set(lw).size; // unique words, so "Double-Double" ≠ "Double Down"
+
     // Accept full matches, or partial ones that share the dish's head noun ("Chicken CURRY" → curry).
     if (coverage < 1 && !(p.w[p.w.length - 1] === head && coverage >= 0.34 && !(modified && !p.w.some((w) => MODIFIERS.has(w))))) continue;
     const score = coverage * 10 + p.w.length;
