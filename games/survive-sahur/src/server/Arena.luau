@@ -1,4 +1,6 @@
 -- Builds the lobby and a village arena with walls to dodge around.
+local BrainrotModels = require(game:GetService("ReplicatedStorage").Common.BrainrotModels)
+
 local Arena = {}
 
 Arena.Size = 220
@@ -158,6 +160,24 @@ function Arena.MakeSahur(position: Vector3): Model
 	stroke.Thickness = 2
 	stroke.Parent = label
 	label.Parent = gui
+
+	-- Swap the simple log for the detailed Tung Tung Sahur figure, welded to the (now invisible) root.
+	if BrainrotModels.Has("tung") then
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Transparency = 1
+			end
+		end
+		local figure, froot = BrainrotModels.Build("tung", { Scale = 1.3, Anchored = false })
+		froot.Massless = true
+		froot.CFrame = root.CFrame * CFrame.new(0, -7 + figure:GetAttribute("RootHeight"), 0)
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = froot
+		weld.Parent = froot
+		figure.Name = "Look"
+		figure.Parent = model
+	end
 
 	local sound = Instance.new("Sound")
 	sound.Name = "Footsteps"

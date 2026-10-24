@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local BrainrotModels = require(ReplicatedStorage.Common.BrainrotModels)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataService = require(ServerScriptService.CommonServer.DataService)
 local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
@@ -87,22 +88,50 @@ local function collect(player: Player, index: number)
 	sync(player)
 end
 
+-- Which character model to show for each name (others fall back to a coloured blob).
+local NAME_TO_MODEL = {
+	Noobini = "noobini", Lirili = "lirili", Tim = "tim_cheese", Fluriflura = "fluri", Talpa = "talpa",
+	Svinina = "svinina", Pipi = "pipi_kiwi", Trippi = "trippi", Tung = "tung", Gangster = "gangster",
+	Brr = "patapim", Chimpanzini = "chimpanzini", Ballerina = "ballerina", Cappuccino = "cappuccino",
+	Frigo = "frigo", Bombardiro = "bombardiro", Orangutini = "orangutini", Cocofanto = "cocofanto",
+	Tralalero = "tralalero", Odin = "odin_din", La = "la_vacca", Garama = "garama", Madundung = "garama",
+	Skibidi = "skibidi", Rizzler = "skibidi", Sigma = "skibidi",
+}
+
+local function buildCharacter(index: number, position: Vector3): (Model?, BasePart?)
+	local first = string.match(Config.Names[index], "^%a+")
+	local id = first and NAME_TO_MODEL[first]
+	if not id or not BrainrotModels.Has(id) then
+		return nil, nil
+	end
+	local model, root = BrainrotModels.Build(id, { Scale = 0.42 })
+	model:PivotTo(CFrame.new(position + Vector3.new(0, model:GetAttribute("RootHeight") - 1.3, 0)))
+	root.Name = "Body"
+	root.CanTouch = true
+	model.Name = "Brainrot" .. index
+	return model, root
+end
+
 for index = 1, TOTAL do
 	local s = spots[index]
 	local color = Color3.fromHSV(index / TOTAL, 0.7, 1)
-	local model = Instance.new("Model")
+	local charModel, charRoot = buildCharacter(index, s.Position)
+	local model = charModel or Instance.new("Model")
 	model.Name = "Brainrot" .. index
-	local body = Instance.new("Part")
-	body.Name = "Body"
-	body.Shape = Enum.PartType.Ball
-	body.Size = Vector3.one * 2.6
-	body.Color = color
-	body.Material = Enum.Material.SmoothPlastic
-	body.Anchored = true
-	body.CanCollide = false
-	body.Position = s.Position
-	body.Parent = model
-	for _, side in { -1, 1 } do
+	local body = charRoot or Instance.new("Part")
+	if not charModel then
+		body.Name = "Body"
+		body.Shape = Enum.PartType.Ball
+		body.Size = Vector3.one * 2.6
+		body.Color = color
+		body.Material = Enum.Material.SmoothPlastic
+		body.Anchored = true
+		body.CanCollide = false
+		body.Position = s.Position
+		body.Parent = model
+	end
+	local sides: { number } = if charModel then {} else { -1, 1 }
+	for _, side in sides do
 		local eye = Instance.new("Part")
 		eye.Shape = Enum.PartType.Ball
 		eye.Size = Vector3.one * 0.7
@@ -120,7 +149,7 @@ for index = 1, TOTAL do
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Size = UDim2.fromOffset(160, 30)
-	gui.StudsOffset = Vector3.new(0, 2.5, 0)
+	gui.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 1, 0)
 	gui.MaxDistance = 30
 	gui.Parent = body
 	local label = Instance.new("TextLabel")

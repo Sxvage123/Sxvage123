@@ -539,6 +539,9 @@ R.newInstance = newInstance
 
 function methods.Destroy(inst)
 	local s = S(inst)
+	if s.destroyed then
+		return -- Roblox allows destroying twice
+	end
 	if s.signals.Destroying then
 		s.signals.Destroying:Fire()
 	end

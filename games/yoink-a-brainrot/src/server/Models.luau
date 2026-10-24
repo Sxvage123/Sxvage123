@@ -2,6 +2,7 @@
 -- Swap in real meshes later by putting Models named after each Id in ServerStorage.Brainrots.
 local ServerStorage = game:GetService("ServerStorage")
 
+local BrainrotModels = require(game:GetService("ReplicatedStorage").Common.BrainrotModels)
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Format = require(game:GetService("ReplicatedStorage").Common.Format)
 
@@ -160,8 +161,40 @@ local function buildFromTemplate(info): (Model?, BasePart?)
 	return model, root
 end
 
+-- Look-alike part model from the shared library, with rarity bling.
+local function buildCharacter(info): (Model?, BasePart?)
+	if not BrainrotModels.Has(info.Id) then
+		return nil, nil
+	end
+	local idx = rarityIndex[info.Rarity] or 1
+	local model, root = BrainrotModels.Build(info.Id, { Scale = 0.72 + (idx - 1) * 0.07 })
+	local rarity = Config.RarityByName[info.Rarity]
+	if idx >= 4 then
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Color = ColorSequence.new(rarity.Color)
+		sparkle.LightEmission = 1
+		sparkle.Size = NumberSequence.new(0.4, 0)
+		sparkle.Rate = 6 * idx
+		sparkle.Lifetime = NumberRange.new(0.8, 1.4)
+		sparkle.Speed = NumberRange.new(2, 4)
+		sparkle.SpreadAngle = Vector2.new(180, 180)
+		sparkle.Parent = root
+	end
+	if idx >= 6 then
+		local light = Instance.new("PointLight")
+		light.Color = rarity.Color
+		light.Range = 14
+		light.Brightness = 2
+		light.Parent = root
+	end
+	return model, root
+end
+
 function Models.Create(info): (Model, BasePart)
 	local model, root = buildFromTemplate(info)
+	if not model then
+		model, root = buildCharacter(info)
+	end
 	if not model then
 		model, root = buildProcedural(info)
 	end

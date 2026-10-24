@@ -94,7 +94,14 @@ RunService.RenderStepped:Connect(function()
 			local base = body:GetAttribute("BasePos") or body.Position
 			body:SetAttribute("BasePos", base)
 			local isFound = found[index] == true
-			body.Transparency = if isFound then 0.75 else 0
+			if model:GetAttribute("FadedLocal") ~= isFound then
+				model:SetAttribute("FadedLocal", isFound)
+				for _, d in model:GetDescendants() do
+					if d:IsA("BasePart") and d ~= body then
+						d.LocalTransparencyModifier = if isFound then 0.75 else 0
+					end
+				end
+			end
 			if root and not isFound then
 				local d = (base - root.Position).Magnitude
 				if d < nearestDist then

@@ -68,6 +68,10 @@ end
 
 ---------------------------------------------------------------- Workspace
 
+cm("Workspace").get.Terrain = function(inst)
+	return inst:FindFirstChild("Terrain")
+end
+
 R.raycastHandler = nil
 cm("WorldRoot").Raycast = function(_, origin, direction, params)
 	assert(D.typeof(origin) == "Vector3" and D.typeof(direction) == "Vector3", "Raycast(origin: Vector3, direction: Vector3)")

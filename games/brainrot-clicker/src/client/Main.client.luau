@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local BrainrotModels = require(ReplicatedStorage.Common.BrainrotModels)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Common.Format)
 local UI = require(ReplicatedStorage.Common.UI)
@@ -393,12 +394,40 @@ end)
 ---------------------------------------------------------------- pet followers (all players, client-side)
 
 local followers: { [Player]: { key: string, parts: { BasePart } } } = {}
+
+local VARIANT_TINTS = {
+	golden = Color3.fromRGB(255, 205, 40),
+	rainbow = Color3.fromRGB(255, 80, 255),
+	void = Color3.fromRGB(40, 0, 80),
+}
 local followFolder = Instance.new("Folder")
 followFolder.Name = "PetFollowers"
 followFolder.Parent = workspace
 
 local function makePet(info): BasePart
 	local rank = Config.RarityRank(info.Rarity)
+	if BrainrotModels.Has(info.Id) then
+		-- Real character model, scaled down. Moving its anchored Root moves the welded figure.
+		local prefix = string.match(info.Id, "^(%a+)_")
+		local model, root = BrainrotModels.Build(info.Id, { Scale = 0.3 + rank * 0.02, Tint = prefix and VARIANT_TINTS[prefix] })
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.CanQuery = false
+			end
+		end
+		if rank >= 5 then
+			local sparkle = Instance.new("ParticleEmitter")
+			sparkle.Color = ColorSequence.new(Config.Rarities[info.Rarity])
+			sparkle.LightEmission = 1
+			sparkle.Size = NumberSequence.new(0.25, 0)
+			sparkle.Rate = 8
+			sparkle.Lifetime = NumberRange.new(0.6)
+			sparkle.Speed = NumberRange.new(1)
+			sparkle.Parent = root
+		end
+		model.Parent = followFolder
+		return root
+	end
 	local p = Instance.new("Part")
 	p.Shape = Enum.PartType.Ball
 	p.Size = Vector3.one * (1.6 + rank * 0.2)
@@ -446,7 +475,7 @@ RunService.RenderStepped:Connect(function()
 		if not entry or entry.key ~= key then
 			if entry then
 				for _, p in entry.parts do
-					p:Destroy()
+					(if p.Parent and p.Parent:IsA("Model") then p.Parent else p):Destroy()
 				end
 			end
 			entry = { key = key, parts = {} }
@@ -472,7 +501,7 @@ RunService.RenderStepped:Connect(function()
 	for plr, entry in followers do
 		if not plr.Parent then
 			for _, p in entry.parts do
-				p:Destroy()
+				(if p.Parent and p.Parent:IsA("Model") then p.Parent else p):Destroy()
 			end
 			followers[plr] = nil
 		end

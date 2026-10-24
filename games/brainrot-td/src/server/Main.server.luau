@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local BrainrotModels = require(ReplicatedStorage.Common.BrainrotModels)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataService = require(ServerScriptService.CommonServer.DataService)
 local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
@@ -201,7 +202,18 @@ end
 
 local function spawnEnemy(def, healthScale: number)
 	local size = def.Size
-	local body = part({
+	local container: Instance = enemiesFolder
+	local lift = size / 2
+	local body: BasePart
+	if BrainrotModels.Has(def.Id) then
+		local model, root = BrainrotModels.Build(def.Id, { Scale = size / 4.5 })
+		root.Name = def.Id
+		model.Parent = enemiesFolder
+		container = model
+		body = root
+		lift = model:GetAttribute("RootHeight")
+	end
+	body = body or part({
 		Name = def.Id,
 		Shape = Enum.PartType.Ball,
 		Size = Vector3.one * size,
@@ -209,7 +221,8 @@ local function spawnEnemy(def, healthScale: number)
 		CanCollide = false,
 		CanQuery = false,
 	}, enemiesFolder)
-	for _, side in { -1, 1 } do
+	local sides: { number } = if container == enemiesFolder then { -1, 1 } else {}
+	for _, side in sides do
 		local eye = part({ Shape = Enum.PartType.Ball, Size = Vector3.one * size * 0.25, Color = Color3.new(1, 1, 1), CanCollide = false, CanQuery = false, Anchored = false, Massless = true }, body)
 		eye.CFrame = body.CFrame * CFrame.new(side * size * 0.2, size * 0.15, -size * 0.42)
 		local w = Instance.new("WeldConstraint")
@@ -219,7 +232,7 @@ local function spawnEnemy(def, healthScale: number)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Size = UDim2.fromOffset(80, 10)
-	gui.StudsOffset = Vector3.new(0, size / 2 + 1, 0)
+	gui.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 1, 0)
 	gui.MaxDistance = 120
 	gui.Parent = body
 	local back = Instance.new("Frame")
@@ -232,9 +245,9 @@ local function spawnEnemy(def, healthScale: number)
 	fill.BorderSizePixel = 0
 	fill.Parent = back
 	local startPos, startDir = pointAt(0)
-	body.CFrame = CFrame.lookAt(startPos, startPos + startDir) + Vector3.new(0, size / 2, 0)
+	body.CFrame = CFrame.lookAt(startPos, startPos + startDir) + Vector3.new(0, lift, 0)
 	local hp = def.Health * healthScale
-	local e = { Def = def, Body = body, Health = hp, MaxHealth = hp, Dist = 0, Fill = fill, Boss = def.Id:sub(1, 5) == "boss_" }
+	local e = { Def = def, Body = body, Container = container, Lift = lift, Health = hp, MaxHealth = hp, Dist = 0, Fill = fill, Boss = def.Id:sub(1, 5) == "boss_" }
 	table.insert(enemies, e)
 	return e
 end
@@ -244,7 +257,7 @@ local function killEnemy(e, rewarded: boolean)
 	if index then
 		table.remove(enemies, index)
 	end
-	e.Body:Destroy()
+	(if e.Container ~= enemiesFolder then e.Container else e.Body):Destroy()
 	if rewarded then
 		for _, player in Players:GetPlayers() do
 			addMatchCash(player, e.Def.Reward)
@@ -269,13 +282,29 @@ local function buildUnitModel(unit, level: number, position: Vector3, owner: Pla
 	local model = Instance.new("Model")
 	model.Name = unit.Id
 	local pad = part({ Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 4.5, 4.5), CFrame = CFrame.new(position + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Config.RarityColor[unit.Rarity], Material = Enum.Material.Neon }, model)
-	local body = part({ Name = "Body", Size = Vector3.new(2.6, 3.4, 2.6), CFrame = CFrame.new(position + Vector3.new(0, 2.3, 0)), Color = unit.Color }, model)
-	part({ Name = "Head", Shape = Enum.PartType.Ball, Size = Vector3.one * 2.4, CFrame = body.CFrame * CFrame.new(0, 2.6, 0), Color = unit.Color:Lerp(Color3.new(1, 1, 1), 0.2) }, model)
+	local body: BasePart
+	if BrainrotModels.Has(unit.Id) then
+		-- Character figure standing on the pad; its parts move into this unit model so clicks select it.
+		local figure, root = BrainrotModels.Build(unit.Id, { Scale = 0.55 + level * 0.05 })
+		figure:PivotTo(CFrame.new(position + Vector3.new(0, 0.6 + figure:GetAttribute("RootHeight"), 0)))
+		root.Name = "Body"
+		for _, child in figure:GetChildren() do
+			if child:IsA("BasePart") then
+				child.CanQuery = true
+			end
+			child.Parent = model
+		end
+		figure:Destroy()
+		body = root
+	else
+		body = part({ Name = "Body", Size = Vector3.new(2.6, 3.4, 2.6), CFrame = CFrame.new(position + Vector3.new(0, 2.3, 0)), Color = unit.Color }, model)
+		part({ Name = "Head", Shape = Enum.PartType.Ball, Size = Vector3.one * 2.4, CFrame = body.CFrame * CFrame.new(0, 2.6, 0), Color = unit.Color:Lerp(Color3.new(1, 1, 1), 0.2) }, model)
+	end
 	model.PrimaryPart = pad
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Tag"
 	gui.Size = UDim2.fromOffset(140, 36)
-	gui.StudsOffset = Vector3.new(0, 6.5, 0)
+	gui.StudsOffset = Vector3.new(0, body.Size.Y / 2 + 2, 0)
 	gui.MaxDistance = 80
 	gui.Parent = body
 	local label = Instance.new("TextLabel")
@@ -498,7 +527,7 @@ task.spawn(function()
 				setAttr()
 			else
 				local pos, dir = pointAt(e.Dist)
-				e.Body.CFrame = CFrame.lookAt(pos, pos + dir) + Vector3.new(0, e.Def.Size / 2, 0)
+				e.Body.CFrame = CFrame.lookAt(pos, pos + dir) + Vector3.new(0, e.Lift, 0)
 			end
 		end
 		for _, u in units do
