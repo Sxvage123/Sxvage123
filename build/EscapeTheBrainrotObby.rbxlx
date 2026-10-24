@@ -1,0 +1,1361 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Common</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[-- Number formatting helpers shared by every game.
+local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbreviate(n: number): string
+	if n ~= n then
+		return "0"
+	end
+	local negative = n < 0
+	n = math.abs(n)
+	local index = 1
+	while n >= 1000 and index < #SUFFIXES do
+		n /= 1000
+		index += 1
+	end
+	local text
+	if index == 1 then
+		text = tostring(math.floor(n))
+	elseif n >= 100 then
+		text = string.format("%d%s", math.floor(n), SUFFIXES[index])
+	else
+		text = string.format("%.2f", math.floor(n * 100) / 100):gsub("%.?0+$", "") .. SUFFIXES[index]
+	end
+	return (negative and "-" or "") .. text
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbreviate(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local m = math.floor(seconds / 60)
+	local s = seconds % 60
+	if m >= 60 then
+		return string.format("%dh %02dm", math.floor(m / 60), m % 60)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">UI</string>
+          <string name="Source"><![CDATA[-- Tiny helpers for building UI from code so the games need no Studio work.
+local UI = {}
+
+function UI.new(className: string, props: { [string]: any }, children: { Instance }?): Instance
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	if children then
+		for _, child in children do
+			child.Parent = inst
+		end
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+function UI.Corner(radius: number?): UICorner
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+function UI.Stroke(color: Color3?, thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return s
+end
+
+function UI.TextStroke(thickness: number?): UIStroke
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.new(0, 0, 0)
+	s.Thickness = thickness or 2
+	return s
+end
+
+-- Big chunky cartoon button used by every game.
+function UI.Button(text: string, color: Color3, props: { [string]: any }?): TextButton
+	local button = UI.new("TextButton", {
+		Text = text,
+		BackgroundColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		AutoButtonColor = true,
+		Size = UDim2.fromOffset(160, 50),
+	}, { UI.Corner(12), UI.Stroke(Color3.new(0, 0, 0), 3), UI.TextStroke(2) }) :: TextButton
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 8)
+	padding.PaddingRight = UDim.new(0, 8)
+	padding.Parent = button
+	if props then
+		for key, value in props do
+			(button :: any)[key] = value
+		end
+	end
+	return button
+end
+
+function UI.Label(text: string, props: { [string]: any }?): TextLabel
+	local label = UI.new("TextLabel", {
+		Text = text,
+		BackgroundTransparency = 1,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.FredokaOne,
+		TextScaled = true,
+		Size = UDim2.fromOffset(200, 40),
+	}, { UI.TextStroke(2) }) :: TextLabel
+	if props then
+		for key, value in props do
+			(label :: any)[key] = value
+		end
+	end
+	return label
+end
+
+-- Toast notifications stacked at the top of the screen.
+function UI.CreateToaster(screenGui: ScreenGui)
+	local holder = UI.new("Frame", {
+		Name = "Toasts",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 90),
+		Size = UDim2.new(0.6, 0, 0, 300),
+		Parent = screenGui,
+	})
+	local layout = Instance.new("UIListLayout")
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+
+	local TweenService = game:GetService("TweenService")
+	local order = 0
+	return function(text: string, color: Color3?)
+		order += 1
+		local label = UI.Label(text, {
+			Size = UDim2.new(1, 0, 0, 32),
+			TextColor3 = color or Color3.new(1, 1, 1),
+			LayoutOrder = order,
+			Parent = holder,
+		})
+		task.delay(3.5, function()
+			local tween = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1 })
+			tween:Play()
+			tween.Completed:Wait()
+			label:Destroy()
+		end)
+	end
+end
+
+return UI
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="4">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Escape the Brainrot Obby. Replace the 0s with real IDs from the Creator Dashboard.
+local Config = {}
+
+Config.Passes = {
+	SpeedCoil = 0,
+	GravityCoil = 0,
+	VIP = 0,
+	DoubleWins = 0,
+}
+Config.PassInfo = {
+	{ Key = "SpeedCoil", Name = "Speed Coil", Price = 99, Description = "Toggle super speed" },
+	{ Key = "GravityCoil", Name = "Gravity Coil", Price = 99, Description = "Toggle mega jumps" },
+	{ Key = "VIP", Name = "VIP", Price = 249, Description = "Rainbow trail, VIP tag, +1 free skip every finish" },
+	{ Key = "DoubleWins", Name = "2x Wins", Price = 149, Description = "Get 2 wins every time you finish" },
+}
+
+Config.Products = {
+	SkipStage = 0,
+	Skip5 = 0,
+	SkipToEnd = 0,
+}
+Config.ProductInfo = {
+	{ Key = "SkipStage", Name = "Skip Stage", Price = 15, Description = "Skip the stage you're on" },
+	{ Key = "Skip5", Name = "Skip 5 Stages", Price = 59, Description = "Jump ahead 5 stages" },
+	{ Key = "SkipToEnd", Name = "Skip to End", Price = 399, Description = "Teleport to the final stage" },
+}
+
+Config.StageCount = 60
+Config.SpeedCoilWalkSpeed = 30
+Config.GravityCoilJump = 85
+Config.NormalWalkSpeed = 16
+Config.NormalJump = 50
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="6">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="7">
+      <Properties>
+        <string name="Name">CommonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Session-locked DataStore saving shared by every game.
+-- Keeps each player's data in memory, autosaves, and never lets two servers
+-- write the same player at once (prevents item duplication / rollbacks).
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local DataService = {}
+
+local AUTOSAVE_INTERVAL = 90
+local LOCK_EXPIRE = 600
+local LOAD_ATTEMPTS = 6
+
+local profiles: { [Player]: { [string]: any } } = {}
+local loadedEvent = Instance.new("BindableEvent")
+local releasingEvent = Instance.new("BindableEvent")
+DataService.ProfileLoaded = loadedEvent.Event -- (player, data)
+DataService.ProfileReleasing = releasingEvent.Event -- (player, data) fired before the final save
+
+local store: DataStore? = nil
+local memoryStore: { [string]: any } = {}
+local template: { [string]: any } = {}
+local initialized = false
+
+local function deepCopy(value)
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in value do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+DataService.DeepCopy = deepCopy
+
+local function reconcile(data, tmpl)
+	for key, value in tmpl do
+		if data[key] == nil then
+			data[key] = deepCopy(value)
+		elseif type(value) == "table" and type(data[key]) == "table" and next(value) ~= nil and #value == 0 then
+			reconcile(data[key], value)
+		end
+	end
+end
+
+local function update(key: string, transform: (any) -> any): (boolean, any)
+	if not store then
+		local result = transform(memoryStore[key])
+		if result ~= nil then
+			memoryStore[key] = deepCopy(result)
+		end
+		return true, result
+	end
+	local ok, result = pcall(function()
+		return (store :: DataStore):UpdateAsync(key, transform)
+	end)
+	return ok, result
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+local function loadProfile(player: Player)
+	local key = keyFor(player)
+	for attempt = 1, LOAD_ATTEMPTS do
+		local stealLock = attempt == LOAD_ATTEMPTS
+		local lockedElsewhere = false
+		local ok, result = update(key, function(stored)
+			stored = stored or { Data = deepCopy(template) }
+			local lock = stored.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_EXPIRE and not stealLock then
+				lockedElsewhere = true
+				return nil
+			end
+			stored.Lock = { JobId = game.JobId, Time = os.time() }
+			return stored
+		end)
+		if ok and result and not lockedElsewhere then
+			local data = result.Data or deepCopy(template)
+			reconcile(data, template)
+			return data
+		end
+		if not ok then
+			warn("[DataService] load failed for", player.Name, result)
+		end
+		task.wait(lockedElsewhere and 5 or 2)
+		if not player.Parent then
+			return nil
+		end
+	end
+	return nil
+end
+
+-- Saves the player's data. `release` clears the session lock (used on leave).
+function DataService.Save(player: Player, release: boolean?): boolean
+	local data = profiles[player]
+	if not data then
+		return false
+	end
+	data.LastSave = os.time()
+	local snapshot = deepCopy(data)
+	local ok, err = update(keyFor(player), function(stored)
+		stored = stored or {}
+		if stored.Lock and stored.Lock.JobId ~= game.JobId then
+			-- Another server took over this player; never overwrite its data.
+			return nil
+		end
+		stored.Data = snapshot
+		stored.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		return stored
+	end)
+	if not ok then
+		warn("[DataService] save failed for", player.Name, err)
+	end
+	return ok
+end
+
+function DataService.Get(player: Player): { [string]: any }?
+	return profiles[player]
+end
+
+function DataService.WaitFor(player: Player, timeout: number?): { [string]: any }?
+	local deadline = os.clock() + (timeout or 15)
+	while not profiles[player] and player.Parent and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+local function onPlayerAdded(player: Player)
+	local data = loadProfile(player)
+	if not player.Parent then
+		if data then
+			profiles[player] = data
+			DataService.Save(player, true)
+			profiles[player] = nil
+		end
+		return
+	end
+	if not data then
+		player:Kick("Your data could not load. Please rejoin in a moment!")
+		return
+	end
+	data.LoginCount = (data.LoginCount or 0) + 1
+	profiles[player] = data
+	loadedEvent:Fire(player, data)
+end
+
+local function onPlayerRemoving(player: Player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	releasingEvent:Fire(player, data)
+	DataService.Save(player, true)
+	profiles[player] = nil
+end
+
+function DataService.Init(storeName: string, dataTemplate: { [string]: any })
+	assert(not initialized, "DataService already initialized")
+	initialized = true
+	template = dataTemplate
+	template.LastSave = template.LastSave or 0
+	template.LoginCount = template.LoginCount or 0
+	template.Receipts = template.Receipts or {}
+	template.RobuxSpent = template.RobuxSpent or 0
+
+	local ok, result = pcall(function()
+		local s = DataStoreService:GetDataStore(storeName)
+		if RunService:IsStudio() then
+			-- Throws when "Enable Studio Access to API Services" is off.
+			s:GetAsync("__probe")
+		end
+		return s
+	end)
+	if ok then
+		store = result
+	else
+		warn("[DataService] DataStores unavailable, using memory only (turn on API access in Game Settings to save):", result)
+	end
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(AUTOSAVE_INTERVAL)
+			for player in profiles do
+				task.spawn(DataService.Save, player, false)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				releasingEvent:Fire(player, profiles[player])
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + 25
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game pass ownership + developer product receipts, done safely:
+-- every receipt is granted exactly once and saved before Roblox is told it succeeded.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local DataService = require(script.Parent.DataService)
+
+local MonetizationService = {}
+
+type Config = {
+	Passes: { [string]: number },
+	Products: { [string]: number },
+	ProductHandlers: { [string]: (Player, { [string]: any }) -> boolean? },
+	OnPassOwned: ((Player, string) -> ())?,
+}
+
+local passes: { [string]: number } = {}
+local passIdToName: { [number]: string } = {}
+local productIdToName: { [number]: string } = {}
+local handlers = {}
+local onPassOwned: ((Player, string) -> ())? = nil
+
+local MAX_RECEIPTS = 100
+
+local function setPass(player: Player, name: string)
+	if player:GetAttribute("Pass_" .. name) then
+		return
+	end
+	player:SetAttribute("Pass_" .. name, true)
+	if onPassOwned then
+		task.spawn(onPassOwned, player, name)
+	end
+end
+
+function MonetizationService.OwnsPass(player: Player, name: string): boolean
+	return player:GetAttribute("Pass_" .. name) == true
+end
+
+local function checkPasses(player: Player)
+	for name, id in passes do
+		if id and id > 0 then
+			task.spawn(function()
+				local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, id)
+				if ok and owns and player.Parent then
+					setPass(player, name)
+				end
+			end)
+		end
+	end
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.WaitFor(player, 20)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if table.find(data.Receipts, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	local name = productIdToName[receipt.ProductId]
+	local handler = name and handlers[name]
+	if not handler then
+		warn("[Monetization] no handler for product", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, result = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] handler error", name, result)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if result == false then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	table.insert(data.Receipts, receipt.PurchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+	data.RobuxSpent = (data.RobuxSpent or 0) + (receipt.CurrencySpent or 0)
+	if DataService.Save(player, false) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.Init(config: Config)
+	passes = config.Passes
+	handlers = config.ProductHandlers
+	onPassOwned = config.OnPassOwned
+	for name, id in config.Passes do
+		passIdToName[id] = name
+	end
+	for name, id in config.Products do
+		productIdToName[id] = name
+	end
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local name = passIdToName[passId]
+		if purchased and name then
+			setPass(player, name)
+		end
+	end)
+
+	-- In Studio, buttons for passes/products whose ID is still 0 grant instantly so you can test.
+	local testRemote = Instance.new("RemoteEvent")
+	testRemote.Name = "StudioTestPurchase"
+	testRemote.Parent = ReplicatedStorage
+	testRemote.OnServerEvent:Connect(function(player, kind, name)
+		if not RunService:IsStudio() or type(name) ~= "string" then
+			return
+		end
+		if kind == "Pass" and passes[name] ~= nil then
+			setPass(player, name)
+		elseif kind == "Product" and handlers[name] then
+			local data = DataService.Get(player)
+			if data then
+				handlers[name](player, data)
+			end
+		end
+	end)
+
+	Players.PlayerAdded:Connect(checkPasses)
+	for _, player in Players:GetPlayers() do
+		checkPasses(player)
+	end
+end
+
+-- Lets admins / testers grant passes in Studio before IDs exist.
+function MonetizationService.GrantPassForTesting(player: Player, name: string)
+	setPass(player, name)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="10">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">Course</string>
+          <string name="Source"><![CDATA[-- Procedurally builds a deterministic obby course. Each stage starts at a checkpoint.
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+
+local Course = {}
+
+local THEMES = {
+	Color3.fromRGB(255, 99, 99),
+	Color3.fromRGB(255, 170, 60),
+	Color3.fromRGB(255, 230, 80),
+	Color3.fromRGB(110, 230, 110),
+	Color3.fromRGB(80, 200, 255),
+	Color3.fromRGB(150, 110, 255),
+	Color3.fromRGB(255, 120, 220),
+}
+local MEMES = {
+	"Tung Tung Tung Sahur is coming...",
+	"Tralalero Tralala!",
+	"Bombardiro Crocodilo",
+	"Skibidi stage",
+	"Sigma grindset",
+	"Ohio level",
+	"Only 1% beat this",
+	"Brr Brr Patapim",
+	"Chimpanzini Bananini",
+	"Don't fall, gyatt",
+}
+
+local folder: Folder
+local rng: Random
+
+local function part(props): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Material = Enum.Material.SmoothPlastic
+	for k, v in props do
+		(p :: any)[k] = v
+	end
+	p.Parent = folder
+	return p
+end
+
+local function killer(props): BasePart
+	props.Color = Color3.fromRGB(255, 30, 30)
+	props.Material = Enum.Material.Neon
+	local p = part(props)
+	p:SetAttribute("Kill", true)
+	return p
+end
+
+-- Each builder gets the stage start CFrame (on top of the checkpoint) + difficulty 0..1
+-- and returns the CFrame where the next checkpoint goes.
+local builders = {}
+
+-- Default character: WalkSpeed 16, JumpPower 50 => ~8 stud flat jump, ~7 studs high.
+-- Every gap below stays under that so the course is always beatable without passes.
+function builders.Jumps(cf: CFrame, d: number, color: Color3): CFrame
+	local size = 7 - d * 3.5
+	local gap = 3.5 + d * 3
+	local first = true
+	for _ = 1, 5 do
+		local step = if first then gap + size / 2 else gap + size
+		first = false
+		cf *= CFrame.new(rng:NextNumber(-2, 2), rng:NextNumber(-0.5, 1), -step)
+		part({ Size = Vector3.new(size, 1, size), CFrame = cf, Color = color })
+	end
+	return cf * CFrame.new(0, 0, -(gap + size / 2 + 6))
+end
+
+function builders.Lava(cf: CFrame, d: number, color: Color3): CFrame
+	local length = 70
+	part({ Size = Vector3.new(10, 1, length), CFrame = cf * CFrame.new(0, 0, -length / 2), Color = color })
+	local strips = 4 + math.floor(d * 5)
+	for i = 1, strips do
+		local z = -i * (length / (strips + 1))
+		killer({ Size = Vector3.new(10, 1.2, 2 + d * 3), CFrame = cf * CFrame.new(0, 0.1, z) })
+	end
+	return cf * CFrame.new(0, 0, -length - 8)
+end
+
+function builders.Beams(cf: CFrame, d: number, color: Color3): CFrame
+	local width = 2.2 - d * 1.2
+	local z = 0
+	local x = 0
+	for _ = 1, 3 do
+		local len = 22
+		local turn = rng:NextNumber(-8, 8)
+		local a = (cf * CFrame.new(x, 0, -z)).Position
+		local b = (cf * CFrame.new(x + turn, 0, -z - len)).Position
+		part({ Size = Vector3.new(width, 1, (b - a).Magnitude + width), CFrame = CFrame.lookAt((a + b) / 2, b), Color = color })
+		x += turn
+		z += len
+	end
+	killer({ Size = Vector3.new(50, 1, z + 10), CFrame = cf * CFrame.new(x / 2, -12, -z / 2) })
+	return cf * CFrame.new(x, 0, -z - 6)
+end
+
+function builders.Spinner(cf: CFrame, d: number, color: Color3): CFrame
+	local base = part({ Size = Vector3.new(30, 1, 30), CFrame = cf * CFrame.new(0, 0, -15), Color = color })
+	local pivot = part({ Size = Vector3.new(3, 3, 3), CFrame = base.CFrame * CFrame.new(0, 2, 0), Color = Color3.fromRGB(40, 40, 40) })
+	local bar = killer({ Size = Vector3.new(28, 1.4, 1.4), CFrame = pivot.CFrame * CFrame.new(0, 0.5, 0), Anchored = false, CanCollide = false })
+	local a0 = Instance.new("Attachment")
+	a0.CFrame = CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+	a0.Parent = pivot
+	local a1 = Instance.new("Attachment")
+	a1.CFrame = CFrame.Angles(0, 0, math.rad(90))
+	a1.Parent = bar
+	local hinge = Instance.new("HingeConstraint")
+	hinge.Attachment0 = a0
+	hinge.Attachment1 = a1
+	hinge.ActuatorType = Enum.ActuatorType.Motor
+	hinge.MotorMaxTorque = math.huge
+	hinge.AngularVelocity = 1.5 + d * 2.5
+	hinge.Parent = bar
+	bar:SetNetworkOwner(nil)
+	return cf * CFrame.new(0, 0, -36)
+end
+
+function builders.Climb(cf: CFrame, d: number, color: Color3): CFrame
+	local height = 20 + d * 15
+	part({ Size = Vector3.new(14, 1, 12), CFrame = cf * CFrame.new(0, 0, -6), Color = color })
+	local truss = Instance.new("TrussPart")
+	truss.Anchored = true
+	truss.Size = Vector3.new(2, height, 2)
+	truss.CFrame = cf * CFrame.new(0, height / 2, -13)
+	truss.Color = Color3.fromRGB(200, 200, 200)
+	truss.Parent = folder
+	part({ Size = Vector3.new(8, 1, 8), CFrame = cf * CFrame.new(0, height, -18), Color = color })
+	if d > 0.4 then
+		killer({ Size = Vector3.new(1, height * 0.4, 1), CFrame = cf * CFrame.new(1.6, height * 0.35, -13) })
+	end
+	return cf * CFrame.new(0, height, -28)
+end
+
+function builders.Fading(cf: CFrame, d: number, color: Color3): CFrame
+	for i = 1, 6 do
+		local tile = part({
+			Size = Vector3.new(7, 1, 7),
+			CFrame = cf * CFrame.new(if i % 2 == 0 then 3 else -3, 0, -i * 9),
+			Color = color:Lerp(Color3.new(1, 1, 1), 0.4),
+			Material = Enum.Material.Glass,
+		})
+		tile:SetAttribute("Fade", 0.9 - d * 0.5)
+	end
+	killer({ Size = Vector3.new(30, 1, 60), CFrame = cf * CFrame.new(0, -12, -30) })
+	return cf * CFrame.new(0, 0, -66)
+end
+
+function builders.WallHop(cf: CFrame, d: number, color: Color3): CFrame
+	local rise = 0
+	for i = 1, 5 do
+		rise += 2.5 + d * 1.5
+		part({ Size = Vector3.new(4, 1, 4 - d * 1.5), CFrame = cf * CFrame.new(if i % 2 == 0 then 3 else -3, rise, -i * 6), Color = color })
+	end
+	killer({ Size = Vector3.new(24, 1, 40), CFrame = cf * CFrame.new(0, -8, -18) })
+	return cf * CFrame.new(0, rise, -39)
+end
+
+local ORDER = { "Jumps", "Lava", "Beams", "Spinner", "Climb", "Fading", "WallHop" }
+
+local function sign(cf: CFrame, text: string, color: Color3)
+	local board = part({ Size = Vector3.new(12, 4, 0.5), CFrame = cf * CFrame.new(0, 9, 4) * CFrame.Angles(0, math.pi, 0), Color = Color3.fromRGB(30, 30, 30), CanCollide = false })
+	local surface = Instance.new("SurfaceGui")
+	surface.Face = Enum.NormalId.Back
+	surface.Parent = board
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.Text = text
+	label.Parent = surface
+end
+
+-- Returns array of checkpoint parts, index = stage number (1..StageCount+1, last is the finish).
+function Course.Build(): { BasePart }
+	folder = Instance.new("Folder")
+	folder.Name = "Course"
+	folder.Parent = workspace
+	rng = Random.new(1337)
+
+	local checkpoints = {}
+	local cf = CFrame.new(0, 10, -40)
+	part({ Name = "Lobby", Size = Vector3.new(60, 1, 60), CFrame = CFrame.new(0, 9.5, 0), Color = Color3.fromRGB(240, 240, 240), Material = Enum.Material.Marble })
+	for stage = 1, Config.StageCount + 1 do
+		local color = THEMES[(math.floor((stage - 1) / 5) % #THEMES) + 1]
+		local isFinish = stage == Config.StageCount + 1
+		local cp = part({
+			Name = "Checkpoint" .. stage,
+			Size = Vector3.new(12, 1, 12),
+			CFrame = cf,
+			Color = if isFinish then Color3.fromRGB(255, 215, 0) else Color3.fromRGB(60, 60, 70),
+			Material = if isFinish then Enum.Material.Neon else Enum.Material.Slate,
+		})
+		cp:SetAttribute("Stage", stage)
+		checkpoints[stage] = cp
+		sign(cp.CFrame, if isFinish then "YOU ESCAPED!" else "Stage " .. stage .. (if stage % 3 == 0 then " - " .. MEMES[(stage // 3 - 1) % #MEMES + 1] else ""), color)
+		if isFinish then
+			break
+		end
+		local d = (stage - 1) / Config.StageCount
+		local kind = ORDER[(stage - 1) % #ORDER + 1]
+		-- Builders start at the checkpoint's front edge.
+		cf = CFrame.new(builders[kind](cf * CFrame.new(0, 0, -6), d, color).Position)
+	end
+	return checkpoints
+end
+
+return Course
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="12">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Escape the Brainrot Obby server: checkpoints, kill bricks, skips, coils, wins.
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataService = require(ServerScriptService.CommonServer.DataService)
+local MonetizationService = require(ServerScriptService.CommonServer.MonetizationService)
+local Course = require(script.Parent.Course)
+
+Lighting.ClockTime = 16
+Lighting.Brightness = 2.5
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+remotes.Parent = ReplicatedStorage
+local function remote(className: string, name: string): any
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotes
+	return r
+end
+local NotifyRemote = remote("RemoteEvent", "Notify")
+local SelectStageRemote = remote("RemoteEvent", "SelectStage")
+local CoilRemote = remote("RemoteEvent", "ToggleCoil")
+local FreeSkipRemote = remote("RemoteEvent", "FreeSkip")
+
+local checkpoints = Course.Build()
+local FINISH = Config.StageCount + 1
+
+local function notify(player: Player?, text: string, color: Color3?)
+	if player then
+		NotifyRemote:FireClient(player, text, color)
+	else
+		NotifyRemote:FireAllClients(text, color)
+	end
+end
+
+local function sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	player:SetAttribute("MaxStage", data.MaxStage)
+	player:SetAttribute("Wins", data.Wins)
+	player:SetAttribute("FreeSkips", data.FreeSkips)
+	if not player:GetAttribute("Stage") then
+		player:SetAttribute("Stage", data.MaxStage)
+	end
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Stage.Value = player:GetAttribute("Stage")
+		stats.Wins.Value = data.Wins
+	end
+end
+
+local function teleportToStage(player: Player, stage: number)
+	player:SetAttribute("Stage", stage)
+	sync(player)
+	local character = player.Character
+	if character and character:FindFirstChild("HumanoidRootPart") then
+		character:PivotTo(checkpoints[stage].CFrame * CFrame.new(0, 4, 0))
+	end
+end
+
+local function applyMovement(player: Player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	humanoid.UseJumpPower = true
+	local speed = player:GetAttribute("SpeedOn") and MonetizationService.OwnsPass(player, "SpeedCoil")
+	local gravity = player:GetAttribute("GravityOn") and MonetizationService.OwnsPass(player, "GravityCoil")
+	humanoid.WalkSpeed = if speed then Config.SpeedCoilWalkSpeed else Config.NormalWalkSpeed
+	humanoid.JumpPower = if gravity then Config.GravityCoilJump else Config.NormalJump
+end
+
+local function addTrail(player: Player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root or root:FindFirstChild("VIPTrail") then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = root
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1, 0)
+	a1.Parent = root
+	local trail = Instance.new("Trail")
+	trail.Name = "VIPTrail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.6
+	trail.LightEmission = 1
+	trail.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+		ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 255, 0)),
+		ColorSequenceKeypoint.new(0.66, Color3.fromRGB(0, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 255)),
+	})
+	trail.Parent = root
+end
+
+local function win(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local gained = if MonetizationService.OwnsPass(player, "DoubleWins") then 2 else 1
+	data.Wins += gained
+	data.MaxStage = 1
+	if MonetizationService.OwnsPass(player, "VIP") then
+		data.FreeSkips += 1
+	end
+	notify(nil, player.DisplayName .. " ESCAPED THE BRAINROT! (" .. data.Wins .. " wins)", Color3.fromRGB(255, 215, 0))
+	task.delay(2, function()
+		if player.Parent then
+			teleportToStage(player, 1)
+		end
+	end)
+	sync(player)
+end
+
+local function reachStage(player: Player, stage: number)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	local current = player:GetAttribute("Stage") or 1
+	if stage == FINISH then
+		if current == Config.StageCount then
+			player:SetAttribute("Stage", FINISH)
+			win(player)
+		end
+		return
+	end
+	if stage == current + 1 then
+		player:SetAttribute("Stage", stage)
+		if stage > data.MaxStage then
+			data.MaxStage = stage
+			data.TotalStages += 1
+		end
+		sync(player)
+	end
+end
+
+local function playerFromHit(hit: BasePart): Player?
+	local model = hit:FindFirstAncestorOfClass("Model")
+	return model and Players:GetPlayerFromCharacter(model)
+end
+
+for stage, cp in checkpoints do
+	cp.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		if player then
+			reachStage(player, stage)
+		end
+	end)
+end
+
+for _, p in workspace.Course:GetDescendants() do
+	if not p:IsA("BasePart") then
+		continue
+	end
+	if p:GetAttribute("Kill") then
+		p.Touched:Connect(function(hit)
+			local model = hit:FindFirstAncestorOfClass("Model")
+			local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.Health > 0 then
+				humanoid.Health = 0
+			end
+		end)
+	end
+	local fade = p:GetAttribute("Fade")
+	if fade then
+		local busy = false
+		p.Touched:Connect(function(hit)
+			if busy or not playerFromHit(hit) then
+				return
+			end
+			busy = true
+			p.Transparency = 0.5
+			task.wait(fade)
+			p.Transparency = 0.9
+			p.CanCollide = false
+			task.wait(2)
+			p.Transparency = 0
+			p.CanCollide = true
+			busy = false
+		end)
+	end
+end
+
+-- Falling off the world just respawns you at your checkpoint.
+workspace.FallenPartsDestroyHeight = -100
+
+local function skip(player: Player, amount: number): boolean
+	local data = DataService.Get(player)
+	if not data then
+		return false
+	end
+	local current = player:GetAttribute("Stage") or 1
+	local target = math.min(current + amount, Config.StageCount)
+	if target <= current then
+		-- Already on the last stage: send them over the finish line.
+		player:SetAttribute("Stage", Config.StageCount)
+		reachStage(player, FINISH)
+		return true
+	end
+	data.MaxStage = math.max(data.MaxStage, target)
+	teleportToStage(player, target)
+	return true
+end
+
+MonetizationService.Init({
+	Passes = Config.Passes,
+	Products = Config.Products,
+	ProductHandlers = {
+		SkipStage = function(player)
+			return skip(player, 1)
+		end,
+		Skip5 = function(player)
+			return skip(player, 5)
+		end,
+		SkipToEnd = function(player)
+			return skip(player, Config.StageCount)
+		end,
+	},
+	OnPassOwned = function(player, name)
+		if name == "VIP" then
+			addTrail(player)
+		end
+		if name == "SpeedCoil" then
+			player:SetAttribute("SpeedOn", true)
+		elseif name == "GravityCoil" then
+			player:SetAttribute("GravityOn", true)
+		end
+		applyMovement(player)
+		notify(player, "Unlocked " .. name .. "!", Color3.fromRGB(255, 215, 0))
+	end,
+})
+
+SelectStageRemote.OnServerEvent:Connect(function(player, stage)
+	local data = DataService.Get(player)
+	if data and type(stage) == "number" and stage % 1 == 0 and stage >= 1 and stage <= data.MaxStage then
+		teleportToStage(player, stage)
+	end
+end)
+
+CoilRemote.OnServerEvent:Connect(function(player, name)
+	if name == "Speed" then
+		player:SetAttribute("SpeedOn", not player:GetAttribute("SpeedOn"))
+	elseif name == "Gravity" then
+		player:SetAttribute("GravityOn", not player:GetAttribute("GravityOn"))
+	end
+	applyMovement(player)
+end)
+
+FreeSkipRemote.OnServerEvent:Connect(function(player)
+	local data = DataService.Get(player)
+	if data and data.FreeSkips > 0 then
+		data.FreeSkips -= 1
+		skip(player, 1)
+	end
+end)
+
+DataService.ProfileLoaded:Connect(function(player, data)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local stage = Instance.new("IntValue")
+	stage.Name = "Stage"
+	stage.Parent = stats
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Parent = stats
+	stats.Parent = player
+	sync(player)
+	local function onCharacter(character: Model)
+		character:WaitForChild("HumanoidRootPart", 10)
+		task.wait()
+		teleportToStage(player, player:GetAttribute("Stage") or data.MaxStage)
+		applyMovement(player)
+		if MonetizationService.OwnsPass(player, "VIP") then
+			addTrail(player)
+		end
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+end)
+
+DataService.Init("BrainrotObby_v1", {
+	MaxStage = 1,
+	Wins = 0,
+	FreeSkips = 0,
+	TotalStages = 0,
+})
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="13">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="14">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="15">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="16">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Escape the Brainrot Obby client: stage HUD, big skip button, coils, stage selector, shop.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local UI = require(ReplicatedStorage.Common.UI)
+
+local player = Players.LocalPlayer
+local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local testPurchase = ReplicatedStorage:WaitForChild("StudioTestPurchase")
+
+local gui = UI.new("ScreenGui", { Name = "HUD", ResetOnSpawn = false, Parent = player:WaitForChild("PlayerGui") }) :: ScreenGui
+local toast = UI.CreateToaster(gui)
+remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
+
+local function buy(kind: string, key: string)
+	local id = if kind == "Pass" then Config.Passes[key] else Config.Products[key]
+	if id > 0 then
+		if kind == "Pass" then
+			MarketplaceService:PromptGamePassPurchase(player, id)
+		else
+			MarketplaceService:PromptProductPurchase(player, id)
+		end
+	elseif RunService:IsStudio() then
+		testPurchase:FireServer(kind, key)
+		toast("[Studio test] " .. key, Color3.fromRGB(255, 215, 0))
+	else
+		toast("Coming soon!", Color3.fromRGB(255, 90, 90))
+	end
+end
+
+-- Stage header with back/forward arrows.
+local top = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = UDim2.fromOffset(380, 70),
+	BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { UI.Corner(14), UI.Stroke(Color3.new(0, 0, 0), 3) })
+local stageLabel = UI.Label("Stage 1", { Position = UDim2.fromOffset(70, 4), Size = UDim2.new(1, -140, 0, 40), Parent = top })
+local winsLabel = UI.Label("0 Wins", { Position = UDim2.fromOffset(70, 44), Size = UDim2.new(1, -140, 0, 22), TextColor3 = Color3.fromRGB(255, 215, 0), Parent = top })
+local back = UI.Button("<", Color3.fromRGB(80, 80, 110), { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(54, 54), Parent = top })
+local forward = UI.Button(">", Color3.fromRGB(80, 80, 110), { Position = UDim2.new(1, -62, 0, 8), Size = UDim2.fromOffset(54, 54), Parent = top })
+back.Activated:Connect(function()
+	remotes.SelectStage:FireServer((player:GetAttribute("Stage") or 1) - 1)
+end)
+forward.Activated:Connect(function()
+	remotes.SelectStage:FireServer((player:GetAttribute("Stage") or 1) + 1)
+end)
+
+-- Progress bar
+local barBack = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 82),
+	Size = UDim2.fromOffset(380, 14),
+	BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+	Parent = gui,
+}, { UI.Corner(7) })
+local barFill = UI.new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(90, 255, 90), Parent = barBack }, { UI.Corner(7) })
+
+-- Skip button (main revenue driver): bottom right, pulses.
+local skipButton = UI.Button("SKIP STAGE\nR$ 15", Color3.fromRGB(255, 60, 60), {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -16, 1, -110),
+	Size = UDim2.fromOffset(170, 80),
+	Parent = gui,
+})
+skipButton.Activated:Connect(function()
+	if (player:GetAttribute("FreeSkips") or 0) > 0 then
+		remotes.FreeSkip:FireServer()
+	else
+		buy("Product", "SkipStage")
+	end
+end)
+
+local function refresh()
+	local stage = player:GetAttribute("Stage") or 1
+	local maxStage = player:GetAttribute("MaxStage") or 1
+	stageLabel.Text = if stage > Config.StageCount then "FINISHED!" else "Stage " .. stage .. " / " .. Config.StageCount
+	winsLabel.Text = (player:GetAttribute("Wins") or 0) .. " Wins  •  Best " .. maxStage
+	barFill.Size = UDim2.fromScale(math.clamp((stage - 1) / Config.StageCount, 0, 1), 1)
+	local free = player:GetAttribute("FreeSkips") or 0
+	skipButton.Text = if free > 0 then "FREE SKIP\n(" .. free .. " left)" else "SKIP STAGE\nR$ 15"
+	back.Visible = stage > 1
+	forward.Visible = stage < maxStage
+end
+player.AttributeChanged:Connect(refresh)
+refresh()
+
+task.spawn(function()
+	local t = 0
+	while true do
+		t += 0.05
+		local s = 1 + math.sin(t * 4) * 0.04
+		skipButton.Size = UDim2.fromOffset(170 * s, 80 * s)
+		task.wait(0.05)
+	end
+end)
+
+-- Shop + coil toggles on the left.
+local side = UI.new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(130, 260), BackgroundTransparency = 1, Parent = gui })
+local sideLayout = Instance.new("UIListLayout")
+sideLayout.Padding = UDim.new(0, 10)
+sideLayout.Parent = side
+
+local shop = UI.new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0, 520, 0.7, 0),
+	BackgroundColor3 = Color3.fromRGB(40, 40, 60),
+	Visible = false,
+	Parent = gui,
+}, { UI.Corner(18), UI.Stroke(Color3.new(0, 0, 0), 4) }) :: Frame
+UI.Label("SHOP", { Size = UDim2.new(1, -80, 0, 50), Position = UDim2.fromOffset(16, 6), TextXAlignment = Enum.TextXAlignment.Left, Parent = shop })
+UI.Button("X", Color3.fromRGB(230, 60, 60), { Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -58, 0, 8), Parent = shop }).Activated:Connect(function()
+	shop.Visible = false
+end)
+local list = UI.new("ScrollingFrame", {
+	Position = UDim2.fromOffset(12, 64),
+	Size = UDim2.new(1, -24, 1, -76),
+	BackgroundTransparency = 1,
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	ScrollBarThickness = 8,
+	Parent = shop,
+})
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = list
+local order = 0
+local function item(info, kind)
+	order += 1
+	local row = UI.new("Frame", { Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = Color3.fromRGB(60, 60, 85), LayoutOrder = order, Parent = list }, { UI.Corner(12) })
+	UI.Label(info.Name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -150, 0, 32), TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+	UI.Label(info.Description, { Position = UDim2.fromOffset(12, 38), Size = UDim2.new(1, -150, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(200, 200, 220), Parent = row })
+	local b = UI.Button("R$ " .. info.Price, if kind == "Pass" then Color3.fromRGB(40, 180, 70) else Color3.fromRGB(40, 140, 230), {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(120, 52),
+		Parent = row,
+	})
+	if kind == "Pass" then
+		local function owned()
+			if player:GetAttribute("Pass_" .. info.Key) then
+				b.Text = "OWNED"
+				b.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+			end
+		end
+		player:GetAttributeChangedSignal("Pass_" .. info.Key):Connect(owned)
+		owned()
+	end
+	b.Activated:Connect(function()
+		if kind == "Pass" and player:GetAttribute("Pass_" .. info.Key) then
+			return
+		end
+		buy(kind, info.Key)
+	end)
+end
+for _, info in Config.ProductInfo do
+	item(info, "Product")
+end
+for _, info in Config.PassInfo do
+	item(info, "Pass")
+end
+
+UI.Button("SHOP", Color3.fromRGB(40, 180, 70), { Size = UDim2.fromOffset(130, 56), Parent = side }).Activated:Connect(function()
+	shop.Visible = not shop.Visible
+end)
+
+local function coilButton(label: string, passKey: string, attr: string, remoteName: string)
+	local b = UI.Button(label, Color3.fromRGB(60, 120, 255), { Size = UDim2.fromOffset(130, 56), Parent = side })
+	local function refreshCoil()
+		local owned = player:GetAttribute("Pass_" .. passKey)
+		local on = player:GetAttribute(attr)
+		b.Text = if owned then label .. (if on then ": ON" else ": OFF") else label .. " 🔒"
+	end
+	player.AttributeChanged:Connect(refreshCoil)
+	refreshCoil()
+	b.Activated:Connect(function()
+		if player:GetAttribute("Pass_" .. passKey) then
+			remotes.ToggleCoil:FireServer(remoteName)
+		else
+			buy("Pass", passKey)
+		end
+	end)
+end
+coilButton("Speed", "SpeedCoil", "SpeedOn", "Speed")
+coilButton("Jump", "GravityCoil", "GravityOn", "Gravity")
+
+TextChatService.OnIncomingMessage = function(message)
+	local props = Instance.new("TextChatMessageProperties")
+	local source = message.TextSource
+	local speaker = source and Players:GetPlayerByUserId(source.UserId)
+	if speaker and speaker:GetAttribute("Pass_VIP") then
+		props.PrefixText = "<font color='#FFD700'>[VIP]</font> " .. message.PrefixText
+	end
+	return props
+end
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
