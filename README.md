@@ -30,6 +30,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Escape the Tsunami for Brainrots** | Escape Tsunami for Brainrots (grab brainrots, outrun the wave, shelters, base income) | `build/EscapeTsunamiForBrainrots.rbxlx` |
 | **99 Nights with Sahur** | 99 Nights in the Forest (campfire, wood, hunger, night monster, classes) | `build/99NightsWithSahur.rbxlx` |
 | **Brainrot Disaster Survival** | Natural Disaster Survival (6 disasters, pick-the-next-disaster product, upgrades) | `build/BrainrotDisasterSurvival.rbxlx` |
+| **Brainrot Card Clash** | Anime Card Clash (card packs, mutations, 3-card deck, boss ladder) | `build/BrainrotCardClash.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
