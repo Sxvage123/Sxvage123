@@ -27,6 +27,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Pizza Restaurant Tycoon** | My Restaurant (customers, ovens, staff, upgrades) | `build/PizzaRestaurantTycoon.rbxlx` |
 | **Squid Challenge** | Squid Game minigames (Red Light Green Light + Glass Bridge, revives) | `build/SquidChallenge.rbxlx` |
 | **+1 Speed Brainrot Race** | "+1 Speed Every Second" games (huge track, wins, trails, rebirths) | `build/SpeedBrainrotRace.rbxlx` |
+| **Escape the Tsunami for Brainrots** | Escape Tsunami for Brainrots (grab brainrots, outrun the wave, shelters, base income) | `build/EscapeTsunamiForBrainrots.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
