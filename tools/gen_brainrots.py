@@ -82,7 +82,7 @@ function BrainrotModels.Build(id: string, opts: { Scale: number?, Tint: Color3?,
 
 	for i, p in spec.parts do
 		local shape, sx, sy, sz, px, py, pz = p[1], p[2] * scale, p[3] * scale, p[4] * scale, p[5] * scale, p[6] * scale, p[7] * scale
-		local part = Instance.new("Part")
+		local part = Instance.new(if shape == "wedge" then "WedgePart" else "Part")
 		part.Name = "P" .. i
 		part.TopSurface = Enum.SurfaceType.Smooth
 		part.BottomSurface = Enum.SurfaceType.Smooth
@@ -101,6 +101,12 @@ function BrainrotModels.Build(id: string, opts: { Scale: number?, Tint: Color3?,
 		if shape == "ball" then
 			part.Shape = Enum.PartType.Ball
 			part.Size = Vector3.new(sx, sx, sx)
+		elseif shape == "ell" then
+			-- A block with a Sphere mesh renders as a smooth ellipsoid filling its size.
+			part.Size = Vector3.new(sx, sy, sz)
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = part
 		elseif shape == "cyl" then
 			-- Roblox cylinders run along X; specs run along Y.
 			part.Shape = Enum.PartType.Cylinder

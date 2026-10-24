@@ -41,6 +41,12 @@ function build(parts) {
     const [sx, sy, sz] = p.size;
     let geo;
     if (p.s === "ball") geo = new THREE.SphereGeometry(sx / 2, 28, 18);
+    else if (p.s === "ell") { geo = new THREE.SphereGeometry(0.5, 32, 20); geo.scale(sx, sy, sz); }
+    else if (p.s === "wedge") {
+      const sh = new THREE.Shape(); sh.moveTo(-sz / 2, -sy / 2); sh.lineTo(sz / 2, -sy / 2); sh.lineTo(sz / 2, sy / 2); sh.lineTo(-sz / 2, -sy / 2);
+      geo = new THREE.ExtrudeGeometry(sh, { depth: sx, bevelEnabled: false });
+      geo.translate(0, 0, -sx / 2); geo.rotateY(-Math.PI / 2);
+    }
     else if (p.s === "cyl") geo = new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 28);
     else geo = new THREE.BoxGeometry(sx, sy, sz);
     const color = new THREE.Color(`rgb(${p.c[0]},${p.c[1]},${p.c[2]})`);
