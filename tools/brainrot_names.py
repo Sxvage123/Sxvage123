@@ -8,4 +8,6 @@ NAMES = {
     "fluri": "Fluriflura", "talpa": "Talpa di Fero", "svinina": "Svinina Bombardino", "pipi_kiwi": "Pipi Kiwi",
     "gangster": "Gangster Footera", "orangutini": "Orangutini Ananasini", "skibidi": "Skibidi Toilet",
     "garama": "Garama and Madundung",
+    "pet_dog": "Dog", "pet_cat": "Cat", "pet_bunny": "Bunny", "pet_bear": "Bear", "pet_fox": "Fox",
+    "pet_penguin": "Penguin", "pet_dragon": "Dragon", "pet_unicorn": "Unicorn",
 }

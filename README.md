@@ -23,6 +23,7 @@ file in Roblox Studio, hit Play, and it works. No models or assets are needed.
 | **Brainrot Slap Battles** | Slap Battles (PvP gloves, knock players off) | `build/BrainrotSlapBattles.rbxlx` |
 | **Sahur Mystery** | Murder Mystery 2 (Sahur / Sheriff / Innocents, skin crates) | `build/SahurMystery.rbxlx` |
 | **Tower of Brainrot** | Tower of Hell (random tower, timer, lava mutator) | `build/TowerOfBrainrot.rbxlx` |
+| **Pet Breakers** | Pet Simulator 99 (pets break coins, areas, eggs, HUGE pets) | `build/PetBreakers.rbxlx` |
 
 More games are listed at the bottom as they get added.
 
