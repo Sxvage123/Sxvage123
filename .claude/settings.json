@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -o /dev/null -d 'Claude Code needs your input' https://ntfy.sh/claude-26624e420eef || true"
+          }
+        ]
+      }
+    ]
+  }
+}
